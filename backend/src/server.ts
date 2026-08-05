@@ -222,6 +222,21 @@ app.get('/services/:tenantId', async (req: Request, res: Response) => {
   }
 });
 
+app.delete('/service/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    // Opcional: define serviceId como null nos agendamentos antigos para não quebrar integridade
+    await prisma.appointment.updateMany({
+      where: { serviceId: id },
+      data: { serviceId: null },
+    });
+    await prisma.service.delete({ where: { id } });
+    return res.status(200).json({ message: 'Serviço excluído com sucesso.' });
+  } catch (error) {
+    return res.status(400).json({ error: 'Erro ao excluir serviço.' });
+  }
+});
+
 // --- PROFESSIONALS ---
 
 app.post('/professional', async (req: Request, res: Response) => {
@@ -241,6 +256,17 @@ app.get('/professionals/:tenantId', async (req: Request, res: Response) => {
     return res.status(200).json(professionals);
   } catch (error) {
     return res.status(200).json([]);
+  }
+});
+
+app.delete('/professional/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    await prisma.professionalHour.deleteMany({ where: { professionalId: id } });
+    await prisma.professional.delete({ where: { id } });
+    return res.status(200).json({ message: 'Profissional excluído com sucesso.' });
+  } catch (error) {
+    return res.status(400).json({ error: 'Erro ao excluir profissional.' });
   }
 });
 

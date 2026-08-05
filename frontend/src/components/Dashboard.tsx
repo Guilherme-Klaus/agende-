@@ -87,6 +87,8 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
   useEffect(() => {
     if (professionals.length > 0 && !selectedProfForHours) {
       setSelectedProfForHours(professionals[0].id);
+    } else if (professionals.length === 0) {
+      setSelectedProfForHours('');
     }
   }, [professionals]);
 
@@ -162,6 +164,22 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
     } catch (err) { alert('Erro ao cadastrar serviço'); }
   }
 
+  async function handleDeleteService(serviceId: string, serviceName: string) {
+    if (!confirm(`Deseja realmente excluir o serviço "${serviceName}"?`)) return;
+    try {
+      const res = await fetch(`http://localhost:3000/service/${serviceId}`, {
+        method: 'DELETE',
+      });
+      if (res.ok) {
+        fetchServices();
+      } else {
+        alert('Erro ao excluir serviço.');
+      }
+    } catch (err) {
+      alert('Erro de conexão ao excluir serviço.');
+    }
+  }
+
   async function handleCreateProfessional(e: React.FormEvent) {
     e.preventDefault();
     if (!tenantId) return;
@@ -173,6 +191,23 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
       });
       if (res.ok) { setNewProfName(''); setNewProfNickname(''); setNewProfAvatar(''); fetchProfessionals(); }
     } catch (err) { alert('Erro ao cadastrar profissional'); }
+  }
+
+  async function handleDeleteProfessional(profId: string, profName: string) {
+    if (!confirm(`Deseja realmente excluir o profissional ${profName}?`)) return;
+    try {
+      const res = await fetch(`http://localhost:3000/professional/${profId}`, {
+        method: 'DELETE',
+      });
+      if (res.ok) {
+        fetchProfessionals();
+        fetchAppointments();
+      } else {
+        alert('Erro ao excluir profissional.');
+      }
+    } catch (err) {
+      alert('Erro de conexão ao excluir.');
+    }
   }
 
   async function handleUpdateBusinessHour(hourId: string, updatedData: Partial<BusinessHour>) {
@@ -303,7 +338,7 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
               <form onSubmit={handleCreateService} className="space-y-3">
                 <div>
                   <label className="block text-xs text-slate-400 mb-1">Nome do Serviço</label>
-                  <input type="text" required value={newServiceName} onChange={(e) => setNewServiceName(e.target.value)} placeholder="" className="w-full bg-[#0f172a] border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:border-emerald-500 focus:outline-none" />
+                  <input type="text" required value={newServiceName} onChange={(e) => setNewServiceName(e.target.value)} placeholder="Ex: Corte Degradê" className="w-full bg-[#0f172a] border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:border-emerald-500 focus:outline-none" />
                 </div>
                 <div>
                   <label className="block text-xs text-slate-400 mb-1">Duração (minutos)</label>
@@ -319,16 +354,27 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
 
             <div className="md:col-span-2 space-y-3">
               <h3 className="font-bold text-sm">Serviços Cadastrados</h3>
-              <div className="grid grid-cols-1 gap-3">
-                {services.map((s) => (
-                  <div key={s.id} className="bg-[#1e293b] border border-slate-800 p-4 rounded-xl flex items-center justify-between">
-                    <div>
-                      <h4 className="font-bold text-sm text-white">{s.name}</h4>
-                      <p className="text-xs text-slate-400">R$ {s.price.toFixed(2)} • {s.duration} min</p>
+              {services.length === 0 ? (
+                <div className="text-center py-12 bg-[#1e293b] border border-slate-800 rounded-2xl text-slate-500 text-xs">Nenhum serviço cadastrado.</div>
+              ) : (
+                <div className="grid grid-cols-1 gap-3">
+                  {services.map((s) => (
+                    <div key={s.id} className="bg-[#1e293b] border border-slate-800 p-4 rounded-xl flex items-center justify-between gap-3">
+                      <div>
+                        <h4 className="font-bold text-sm text-white">{s.name}</h4>
+                        <p className="text-xs text-slate-400">R$ {s.price.toFixed(2)} • {s.duration} min</p>
+                      </div>
+                      <button
+                        onClick={() => handleDeleteService(s.id, s.name)}
+                        className="text-red-400 hover:text-red-300 p-2 bg-red-500/10 border border-red-500/20 rounded-xl transition-colors"
+                        title="Excluir Serviço"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -357,17 +403,30 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
 
             <div className="md:col-span-2 space-y-3">
               <h3 className="font-bold text-sm">Equipe Cadastrada</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {professionals.map((p) => (
-                  <div key={p.id} className="bg-[#1e293b] border border-slate-800 p-4 rounded-xl flex items-center gap-3">
-                    <img src={p.avatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80'} alt={p.name} className="w-12 h-12 rounded-full object-cover border border-slate-700" />
-                    <div>
-                      <h4 className="font-bold text-sm text-white">{p.name}</h4>
-                      {p.nickname && <p className="text-xs text-slate-400">{p.nickname}</p>}
+              {professionals.length === 0 ? (
+                <div className="text-center py-12 bg-[#1e293b] border border-slate-800 rounded-2xl text-slate-500 text-xs">Nenhum profissional cadastrado.</div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {professionals.map((p) => (
+                    <div key={p.id} className="bg-[#1e293b] border border-slate-800 p-4 rounded-xl flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <img src={p.avatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80'} alt={p.name} className="w-12 h-12 rounded-full object-cover border border-slate-700" />
+                        <div>
+                          <h4 className="font-bold text-sm text-white">{p.name}</h4>
+                          {p.nickname && <p className="text-xs text-slate-400">{p.nickname}</p>}
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => handleDeleteProfessional(p.id, p.name)}
+                        className="text-red-400 hover:text-red-300 p-2 bg-red-500/10 border border-red-500/20 rounded-xl transition-colors"
+                        title="Excluir Profissional"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         )}
