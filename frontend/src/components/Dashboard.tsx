@@ -338,7 +338,7 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
               <form onSubmit={handleCreateService} className="space-y-3">
                 <div>
                   <label className="block text-xs text-slate-400 mb-1">Nome do Serviço</label>
-                  <input type="text" required value={newServiceName} onChange={(e) => setNewServiceName(e.target.value)} placeholder="Ex: Corte Degradê" className="w-full bg-[#0f172a] border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:border-emerald-500 focus:outline-none" />
+                  <input type="text" required value={newServiceName} onChange={(e) => setNewServiceName(e.target.value)} placeholder="" className="w-full bg-[#0f172a] border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:border-emerald-500 focus:outline-none" />
                 </div>
                 <div>
                   <label className="block text-xs text-slate-400 mb-1">Duração (minutos)</label>
