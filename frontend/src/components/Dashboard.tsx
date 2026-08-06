@@ -71,7 +71,7 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
   const isProfessional = user?.role === 'professional';
 
   const [activeTab, setActiveTab] = useState<
-    'appointments' | 'services' | 'professionals' | 'hours' | 'profHours' | 'financial' | 'customers' | 'qrcode' | 'appearance'
+    'appointments' | 'services' | 'professionals' | 'hours' | 'profHours' | 'financial' | 'customers' | 'qrcode' | 'appearance' | 'settings'
   >('appointments');
 
   const [appointments, setAppointments] = useState<Appointment[]>([]);
@@ -95,6 +95,7 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
   
   const [logoPreview, setLogoPreview] = useState('');
   const [tenantSlug, setTenantSlug] = useState('');
+  const [tenantPixKey, setTenantPixKey] = useState(''); // <--- Chave PIX cadastrada
   const [copied, setCopied] = useState(false);
 
   const tenantId = user?.tenantId;
@@ -121,6 +122,7 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
         const data = await res.json();
         if (data.logoUrl) setLogoPreview(data.logoUrl);
         if (data.slug) setTenantSlug(data.slug);
+        if (data.pixKey) setTenantPixKey(data.pixKey); // <--- Carrega a Chave PIX da API
       }
     } catch (err) { console.error(err); }
   }
@@ -305,6 +307,23 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
     } catch (err) { alert('Erro ao cancelar agendamento'); }
   }
 
+  async function handleSavePixKey() {
+    try {
+      const res = await fetch(`http://localhost:3000/tenant/${tenantId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pixKey: tenantPixKey }),
+      });
+      if (res.ok) {
+        alert('Chave PIX salva com sucesso!');
+      } else {
+        alert('Erro ao salvar Chave PIX.');
+      }
+    } catch (err) {
+      alert('Erro de conexão.');
+    }
+  }
+
   function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (file) {
@@ -440,6 +459,9 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
             </button>
             <button onClick={() => setActiveTab('appearance')} className={`py-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap ${activeTab === 'appearance' ? 'border-emerald-500 text-emerald-400' : 'border-transparent text-slate-400 hover:text-slate-200'}`}>
               <Palette className="w-4 h-4" /> Aparência e Cores
+            </button>
+            <button onClick={() => setActiveTab('settings')} className={`py-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap ${activeTab === 'settings' ? 'border-emerald-500 text-emerald-400' : 'border-transparent text-slate-400 hover:text-slate-200'}`}>
+              <DollarSign className="w-4 h-4" /> Chave PIX
             </button>
           </>
         )}
@@ -883,6 +905,35 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
                   </button>
                 ))}
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* ABA: CONFIGURAÇÃO DE CHAVE PIX */}
+        {activeTab === 'settings' && !isProfessional && (
+          <div className="space-y-6 max-w-xl">
+            <div>
+              <h2 className="text-lg font-bold">Configuração de Chave PIX</h2>
+              <p className="text-xs text-slate-400">Informe sua chave PIX para que ela apareça na tela de sucesso quando o cliente realizar um agendamento.</p>
+            </div>
+
+            <div className="bg-[#1e293b] border border-slate-800 p-6 rounded-2xl space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-2">Sua Chave PIX (CPF, CNPJ, E-mail, Telefone ou Aleatória)</label>
+                <input 
+                  type="text" 
+                  placeholder="Ex: 11999999999 ou meu@email.com" 
+                  value={tenantPixKey} 
+                  onChange={(e) => setTenantPixKey(e.target.value)}
+                  className="w-full bg-[#0f172a] border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-white focus:border-emerald-500 focus:outline-none font-mono" 
+                />
+              </div>
+              <button 
+                onClick={handleSavePixKey}
+                className="w-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold py-3 rounded-xl text-xs transition-colors shadow-md shadow-emerald-500/10"
+              >
+                Salvar Chave PIX
+              </button>
             </div>
           </div>
         )}

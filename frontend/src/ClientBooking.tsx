@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { Store, MapPin, ArrowLeft, CheckCircle2, CheckCircle, ArrowRight, History, Calendar, Trash2 } from 'lucide-react';
+import { Store, MapPin, ArrowLeft, CheckCircle2, CheckCircle, ArrowRight, History, Calendar, Trash2, Copy, QrCode, DollarSign } from 'lucide-react';
 
 interface Tenant {
   id: string;
@@ -10,6 +10,7 @@ interface Tenant {
   address: string;
   themeColor: string;
   logoUrl: string;
+  pixKey: string; // <--- Chave PIX cadastrada
 }
 
 interface Service {
@@ -75,6 +76,7 @@ export function ClientBooking() {
   const [clientName, setClientName] = useState('');
   const [clientPhone, setClientPhone] = useState('');
   const [loading, setLoading] = useState(false);
+  const [pixCopied, setPixCopied] = useState(false);
 
   useEffect(() => {
     if (tenantId) {
@@ -611,13 +613,61 @@ export function ClientBooking() {
           </div>
         )}
 
+        {/* TELA DE SUCESSO COM PAGAMENTO VIA PIX */}
         {step === 'success' && (
-          <div className="bg-[#1e293b] border border-slate-800 p-8 rounded-3xl text-center max-w-md mx-auto space-y-4 shadow-2xl">
+          <div className="bg-[#1e293b] border border-slate-800 p-8 rounded-3xl text-center max-w-lg mx-auto space-y-6 shadow-2xl">
             <div className={`w-16 h-16 border rounded-full flex items-center justify-center mx-auto ${activeTheme.bgSoft} ${activeTheme.border} ${activeTheme.text}`}>
               <CheckCircle2 className="w-8 h-8" />
             </div>
-            <h2 className="text-xl font-bold text-white">Agendamento Confirmado!</h2>
-            <button onClick={() => { setStep('services'); setMode('home'); setSelectedServiceIds([]); setSelectedTime(''); }} className="w-full bg-slate-800 hover:bg-slate-700 text-slate-200 py-3 rounded-xl text-xs font-medium transition-colors">Voltar ao Início</button>
+            <div>
+              <h2 className="text-xl font-bold text-white">Agendamento Confirmado!</h2>
+              <p className="text-xs text-slate-400 mt-1">Seu horário foi reservado com sucesso.</p>
+            </div>
+
+            {/* CARD DE PAGAMENTO VIA PIX */}
+            {tenant.pixKey ? (
+              <div className="bg-[#0f172a] border border-emerald-500/30 p-5 rounded-2xl text-left space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-emerald-400">
+                    <DollarSign className="w-5 h-5" />
+                    <span className="font-bold text-xs uppercase tracking-wider">Pagamento via PIX</span>
+                  </div>
+                  <span className="text-sm font-mono font-bold text-emerald-400 bg-emerald-500/10 px-3 py-1 rounded-xl border border-emerald-500/20">
+                    R$ {totalPrice.toFixed(2)}
+                  </span>
+                </div>
+
+                <p className="text-xs text-slate-300">Pague agora mesmo utilizando a chave PIX abaixo:</p>
+
+                <div className="flex items-center gap-2">
+                  <input 
+                    type="text" 
+                    readOnly 
+                    value={tenant.pixKey} 
+                    className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs font-mono text-emerald-300 select-all" 
+                  />
+                  <button 
+                    onClick={() => {
+                      navigator.clipboard.writeText(tenant.pixKey);
+                      setPixCopied(true);
+                      setTimeout(() => setPixCopied(false), 2000);
+                    }}
+                    className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold px-4 py-2 rounded-xl text-xs transition-colors flex items-center gap-1.5 flex-shrink-0"
+                  >
+                    {pixCopied ? <CheckCircle className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                    {pixCopied ? 'Copiado!' : 'Copiar'}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="bg-[#0f172a] border border-slate-800 p-4 rounded-2xl text-slate-400 text-xs">
+                Valor Total do Atendimento: <strong className="text-white font-mono">R$ {totalPrice.toFixed(2)}</strong>
+              </div>
+            )}
+
+            <button onClick={() => { setStep('services'); setMode('home'); setSelectedServiceIds([]); setSelectedTime(''); }} className="w-full bg-slate-800 hover:bg-slate-700 text-slate-200 py-3 rounded-xl text-xs font-medium transition-colors">
+              Voltar ao Início
+            </button>
           </div>
         )}
 

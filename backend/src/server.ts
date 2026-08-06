@@ -18,7 +18,7 @@ app.get('/', (req: Request, res: Response) => {
 // --- TENANTS ---
 app.post('/tenant', async (req: Request, res: Response) => {
   try {
-    const { name, category, whatsapp, address, closingHour, themeColor, logoUrl, slug } = req.body;
+    const { name, category, whatsapp, address, closingHour, themeColor, logoUrl, slug, pixKey } = req.body;
     
     const generatedSlug = slug 
       ? slug.toLowerCase().replace(/[^a-z0-9]/g, '-') 
@@ -33,7 +33,8 @@ app.post('/tenant', async (req: Request, res: Response) => {
         address: address || null, 
         closingHour: closingHour || null,
         themeColor: themeColor || 'emerald',
-        logoUrl: logoUrl || null
+        logoUrl: logoUrl || null,
+        pixKey: pixKey || null
       },
     });
 
@@ -83,7 +84,7 @@ app.get('/tenant/:identifier', async (req: Request, res: Response) => {
 app.put('/tenant/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { name, category, whatsapp, address, themeColor, logoUrl, slug } = req.body;
+    const { name, category, whatsapp, address, themeColor, logoUrl, slug, pixKey } = req.body;
     
     const existing = await prisma.tenant.findUnique({ where: { id } });
     if (!existing) return res.status(404).json({ error: 'Estabelecimento não encontrado.' });
@@ -97,7 +98,8 @@ app.put('/tenant/:id', async (req: Request, res: Response) => {
         whatsapp: whatsapp !== undefined ? whatsapp : existing.whatsapp, 
         address: address !== undefined ? address : existing.address, 
         themeColor: themeColor !== undefined ? themeColor : existing.themeColor,
-        logoUrl: logoUrl !== undefined ? logoUrl : existing.logoUrl
+        logoUrl: logoUrl !== undefined ? logoUrl : existing.logoUrl,
+        pixKey: pixKey !== undefined ? pixKey : existing.pixKey
       },
     });
     return res.status(200).json(updated);
@@ -109,20 +111,29 @@ app.put('/tenant/:id', async (req: Request, res: Response) => {
 app.delete('/tenant/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
+    
+    // 1. Apagar agendamentos primeiro (pois dependem de customers, services e professionals)
+    await prisma.appointment.deleteMany({ where: { tenantId: id } });
+
+    // 2. Apagar horários dos profissionais
     const profs = await prisma.professional.findMany({ where: { tenantId: id } });
     for (const p of profs) {
       await prisma.professionalHour.deleteMany({ where: { professionalId: p.id } });
     }
+
+    // 3. Apagar o restante das tabelas filhas na ordem correta
     await prisma.businessHour.deleteMany({ where: { tenantId: id } });
     await prisma.user.deleteMany({ where: { tenantId: id } });
     await prisma.service.deleteMany({ where: { tenantId: id } });
     await prisma.professional.deleteMany({ where: { tenantId: id } });
     await prisma.customer.deleteMany({ where: { tenantId: id } });
-    await prisma.appointment.deleteMany({ where: { tenantId: id } });
+
+    // 4. Por fim, apagar a empresa (Tenant)
     await prisma.tenant.delete({ where: { id } });
 
     return res.status(200).json({ message: 'Empresa removida com sucesso.' });
   } catch (error) {
+    console.error(error);
     return res.status(400).json({ error: 'Erro ao excluir a empresa.' });
   }
 });
@@ -366,7 +377,6 @@ app.post('/customer', async (req: Request, res: Response) => {
   }
 });
 
-// Rota de Histórico Otimizada (busca limpando os números)
 app.get('/customer-appointments/:tenantId', async (req: Request, res: Response) => {
   try {
     const { tenantId } = req.params;
@@ -376,7 +386,6 @@ app.get('/customer-appointments/:tenantId', async (req: Request, res: Response) 
 
     const cleanSearchPhone = String(phone).replace(/\D/g, '');
 
-    // Busca todos os clientes do tenant e filtra no JS os que contêm os dígitos informados
     const allCustomers = await prisma.customer.findMany({ where: { tenantId } });
     const matchedCustomers = allCustomers.filter(c => c.phone.replace(/\D/g, '').includes(cleanSearchPhone));
     const customerIds = matchedCustomers.map(c => c.id);
