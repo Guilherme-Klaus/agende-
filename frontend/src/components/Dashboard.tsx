@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Building2, Calendar, Briefcase, Users, LogOut, Trash2, 
-  Clock, CheckCircle, XCircle, MessageSquare, Settings, ShieldCheck, DollarSign, UserCheck 
+  Clock, CheckCircle, XCircle, MessageSquare, Settings, ShieldCheck, DollarSign, UserCheck, QrCode, Copy, ExternalLink, Palette 
 } from 'lucide-react';
 
 interface UserProps {
@@ -71,7 +71,7 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
   const isProfessional = user?.role === 'professional';
 
   const [activeTab, setActiveTab] = useState<
-    'appointments' | 'services' | 'professionals' | 'hours' | 'profHours' | 'financial' | 'customers'
+    'appointments' | 'services' | 'professionals' | 'hours' | 'profHours' | 'financial' | 'customers' | 'qrcode' | 'appearance'
   >('appointments');
 
   const [appointments, setAppointments] = useState<Appointment[]>([]);
@@ -92,12 +92,19 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
   const [newProfAvatar, setNewProfAvatar] = useState('');
   const [newProfEmail, setNewProfEmail] = useState('');
   const [newProfPassword, setNewProfPassword] = useState('');
+  
+  const [logoPreview, setLogoPreview] = useState('');
+  const [tenantSlug, setTenantSlug] = useState('');
+  const [copied, setCopied] = useState(false);
 
   const tenantId = user?.tenantId;
+  const bookingIdentifier = tenantSlug || tenantId;
+  const bookingUrl = `${window.location.origin}/agendar/${bookingIdentifier}`;
 
   useEffect(() => {
     if (tenantId) {
       fetchAppointments();
+      fetchTenantInfo();
       if (!isProfessional) {
         fetchServices();
         fetchProfessionals();
@@ -106,6 +113,17 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
       }
     }
   }, [tenantId, isProfessional]);
+
+  async function fetchTenantInfo() {
+    try {
+      const res = await fetch(`http://localhost:3000/tenant/${tenantId}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.logoUrl) setLogoPreview(data.logoUrl);
+        if (data.slug) setTenantSlug(data.slug);
+      }
+    } catch (err) { console.error(err); }
+  }
 
   useEffect(() => {
     if (professionals.length > 0 && !selectedProfForHours) {
@@ -287,6 +305,54 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
     } catch (err) { alert('Erro ao cancelar agendamento'); }
   }
 
+  function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+        const base64String = reader.result as string;
+        setLogoPreview(base64String);
+
+        try {
+          const res = await fetch(`http://localhost:3000/tenant/${tenantId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ logoUrl: base64String }),
+          });
+          if (res.ok) {
+            alert('Foto de perfil do estabelecimento atualizada com sucesso!');
+          }
+        } catch (err) {
+          alert('Erro ao salvar a imagem.');
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  }
+
+  async function handleSaveSlug() {
+    try {
+      const res = await fetch(`http://localhost:3000/tenant/${tenantId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slug: tenantSlug }),
+      });
+      if (res.ok) {
+        alert('Link personalizado salvo com sucesso!');
+      } else {
+        alert('Este link já pode estar em uso.');
+      }
+    } catch (err) {
+      alert('Erro ao salvar link.');
+    }
+  }
+
+  function handleCopyLink() {
+    navigator.clipboard.writeText(bookingUrl);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
   const now = new Date();
   now.setHours(0, 0, 0, 0);
 
@@ -369,13 +435,18 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
             <button onClick={() => setActiveTab('customers')} className={`py-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap ${activeTab === 'customers' ? 'border-emerald-500 text-emerald-400' : 'border-transparent text-slate-400 hover:text-slate-200'}`}>
               <UserCheck className="w-4 h-4" /> Clientes (CRM)
             </button>
+            <button onClick={() => setActiveTab('qrcode')} className={`py-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap ${activeTab === 'qrcode' ? 'border-emerald-500 text-emerald-400' : 'border-transparent text-slate-400 hover:text-slate-200'}`}>
+              <QrCode className="w-4 h-4" /> QR Code de Agendamento
+            </button>
+            <button onClick={() => setActiveTab('appearance')} className={`py-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap ${activeTab === 'appearance' ? 'border-emerald-500 text-emerald-400' : 'border-transparent text-slate-400 hover:text-slate-200'}`}>
+              <Palette className="w-4 h-4" /> Aparência e Cores
+            </button>
           </>
         )}
       </div>
 
       <main className="flex-1 p-6 max-w-6xl mx-auto w-full space-y-8">
         
-        {/* ABA: AGENDAMENTOS SEPARADOS POR DIAS */}
         {activeTab === 'appointments' && (
           <div className="space-y-6">
             <h2 className="text-lg font-bold">Agenda de Atendimentos</h2>
@@ -430,7 +501,6 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
           </div>
         )}
 
-        {/* ABA: SERVIÇOS */}
         {activeTab === 'services' && !isProfessional && (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="bg-[#1e293b] border border-slate-800 p-6 rounded-2xl h-fit space-y-4">
@@ -475,7 +545,6 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
           </div>
         )}
 
-        {/* ABA: PROFISSIONAIS */}
         {activeTab === 'professionals' && !isProfessional && (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="bg-[#1e293b] border border-slate-800 p-6 rounded-2xl h-fit space-y-4">
@@ -528,7 +597,6 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
           </div>
         )}
 
-        {/* ABA: EXPEDIENTE GERAL */}
         {activeTab === 'hours' && !isProfessional && (
           <div className="space-y-4">
             <div>
@@ -564,7 +632,6 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
           </div>
         )}
 
-        {/* ABA: HORÁRIOS POR PROFISSIONAL */}
         {activeTab === 'profHours' && !isProfessional && (
           <div className="space-y-6">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -621,7 +688,6 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
           </div>
         )}
 
-        {/* ABA: FATURAMENTO */}
         {activeTab === 'financial' && !isProfessional && (
           <div className="space-y-6">
             <h2 className="text-lg font-bold">Métricas de Faturamento</h2>
@@ -642,7 +708,6 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
           </div>
         )}
 
-        {/* ABA: CLIENTES (CRM) */}
         {activeTab === 'customers' && !isProfessional && (
           <div className="space-y-4">
             <h2 className="text-lg font-bold">Base de Clientes (CRM)</h2>
@@ -672,6 +737,153 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
                 </table>
               </div>
             )}
+          </div>
+        )}
+
+        {activeTab === 'qrcode' && !isProfessional && (
+          <div className="space-y-6 max-w-xl mx-auto text-center">
+            <div>
+              <h2 className="text-xl font-bold text-white">QR Code para o Balcão / Recepção</h2>
+              <p className="text-xs text-slate-400 mt-1">Imprima este QR Code e coloque em um display no seu estabelecimento para seus clientes escanearem e agendarem na hora!</p>
+            </div>
+
+            <div className="bg-[#1e293b] border border-slate-800 p-8 rounded-3xl shadow-2xl space-y-6 flex flex-col items-center">
+              <div className="bg-white p-4 rounded-2xl shadow-inner">
+                <img 
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(bookingUrl)}`} 
+                  alt="QR Code de Agendamento" 
+                  className="w-56 h-56 object-contain"
+                />
+              </div>
+
+              <div className="w-full space-y-3">
+                <div className="flex items-center gap-2 bg-[#0f172a] border border-slate-800 p-3 rounded-xl">
+                  <input 
+                    type="text" 
+                    readOnly 
+                    value={bookingUrl} 
+                    className="w-full bg-transparent text-xs text-slate-300 focus:outline-none font-mono"
+                  />
+                  <button 
+                    onClick={handleCopyLink}
+                    className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold px-3 py-2 rounded-lg text-xs transition-colors flex items-center gap-1.5 shrink-0"
+                  >
+                    <Copy className="w-3.5 h-3.5" /> {copied ? 'Copiado!' : 'Copiar'}
+                  </button>
+                </div>
+
+                <a 
+                  href={bookingUrl} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="block w-full bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold py-3 rounded-xl text-xs transition-colors flex items-center justify-center gap-2"
+                >
+                  <ExternalLink className="w-4 h-4" /> Abrir Página de Agendamento em Nova Aba
+                </a>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ABA: APARÊNCIA, LINK PERSONALIZADO E LOGO */}
+        {activeTab === 'appearance' && !isProfessional && (
+          <div className="space-y-8 max-w-xl">
+            {/* Link Personalizado (Slug) */}
+            <div className="space-y-4">
+              <div>
+                <h2 className="text-lg font-bold">Link Personalizado (Slug)</h2>
+                <p className="text-xs text-slate-400">Defina um nome limpo para o seu link de agendamento (ex: psicologanathi).</p>
+              </div>
+
+              <div className="bg-[#1e293b] border border-slate-800 p-5 rounded-2xl space-y-3">
+                <label className="block text-xs text-slate-400">Seu Link Exclusivo</label>
+                <div className="flex gap-2">
+                  <input 
+                    type="text" 
+                    placeholder="ex: psicologanathi" 
+                    value={tenantSlug} 
+                    onChange={(e) => setTenantSlug(e.target.value)}
+                    className="w-full bg-[#0f172a] border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none" 
+                  />
+                  <button 
+                    onClick={handleSaveSlug}
+                    className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold px-4 py-2 rounded-xl text-xs transition-colors shrink-0"
+                  >
+                    Salvar Link
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Foto de Perfil / Logo */}
+            <div className="space-y-4">
+              <div>
+                <h2 className="text-lg font-bold">Foto de Perfil / Logo do Estabelecimento</h2>
+                <p className="text-xs text-slate-400">Faça upload de uma imagem do seu computador para usar como foto de perfil.</p>
+              </div>
+
+              <div className="bg-[#1e293b] border border-slate-800 p-6 rounded-2xl flex items-center gap-6">
+                <div className="w-20 h-20 rounded-2xl border border-slate-700 overflow-hidden bg-[#0f172a] flex items-center justify-center shrink-0">
+                  {logoPreview ? (
+                    <img src={logoPreview} alt="Logo Preview" className="w-full h-full object-cover" />
+                  ) : (
+                    <Building2 className="w-8 h-8 text-slate-500" />
+                  )}
+                </div>
+
+                <div className="space-y-2 flex-1">
+                  <label className="block text-xs font-semibold text-slate-300">Selecionar imagem do computador</label>
+                  <input 
+                    type="file" 
+                    accept="image/*"
+                    onChange={handleImageUpload}
+                    className="block w-full text-xs text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-emerald-500/10 file:text-emerald-400 hover:file:bg-emerald-500/20 cursor-pointer" 
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Temas */}
+            <div className="space-y-4">
+              <div>
+                <h2 className="text-lg font-bold">Personalização do Tema Visual</h2>
+                <p className="text-xs text-slate-400">Escolha a cor principal que aparecerá na sua página de agendamento público.</p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                {[
+                  { id: 'emerald', name: 'Verde Neon (Padrão)', color: 'bg-emerald-500' },
+                  { id: 'blue', name: 'Azul Elétrico', color: 'bg-blue-600' },
+                  { id: 'purple', name: 'Roxo Neon', color: 'bg-purple-600' },
+                  { id: 'pink', name: 'Rosa Estúdio', color: 'bg-pink-600' },
+                ].map((theme) => (
+                  <button
+                    key={theme.id}
+                    onClick={async () => {
+                      try {
+                        const res = await fetch(`http://localhost:3000/tenant/${tenantId}`, {
+                          method: 'PUT',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ themeColor: theme.id }),
+                        });
+                        if (res.ok) {
+                          alert('Tema atualizado com sucesso!');
+                        }
+                      } catch (err) {
+                        alert('Erro ao atualizar tema.');
+                      }
+                    }}
+                    className="bg-[#1e293b] border border-slate-800 p-5 rounded-2xl flex items-center gap-4 hover:border-emerald-500/50 transition-all text-left"
+                  >
+                    <div className={`w-8 h-8 rounded-full ${theme.color} shadow-md`}></div>
+                    <div>
+                      <p className="font-bold text-xs text-white">{theme.name}</p>
+                      <p className="text-[10px] text-slate-400 mt-0.5">Aplicar este estilo</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         )}
 

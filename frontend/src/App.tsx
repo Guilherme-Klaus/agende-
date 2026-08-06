@@ -107,7 +107,7 @@ export function App() {
                       <ShieldCheck className="w-8 h-8 text-emerald-400" />
                     </div>
                     <div>
-                      <h1 className="text-2xl font-bold tracking-tight text-white">Agende+</h1>
+                      <h1 className="text-2xl font-bold tracking-tight text-white">Agende+ </h1>
                       <p className="text-xs text-slate-400">Acesse o painel do seu estabelecimento</p>
                     </div>
                   </div>

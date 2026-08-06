@@ -18,9 +18,23 @@ app.get('/', (req: Request, res: Response) => {
 // --- TENANTS ---
 app.post('/tenant', async (req: Request, res: Response) => {
   try {
-    const { name, category, whatsapp, address, closingHour } = req.body;
+    const { name, category, whatsapp, address, closingHour, themeColor, logoUrl, slug } = req.body;
+    
+    const generatedSlug = slug 
+      ? slug.toLowerCase().replace(/[^a-z0-9]/g, '-') 
+      : name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '-');
+
     const newTenant = await prisma.tenant.create({
-      data: { name, category: category || null, whatsapp: whatsapp || null, address: address || null, closingHour: closingHour || null },
+      data: { 
+        name, 
+        slug: generatedSlug,
+        category: category || null, 
+        whatsapp: whatsapp || null, 
+        address: address || null, 
+        closingHour: closingHour || null,
+        themeColor: themeColor || 'emerald',
+        logoUrl: logoUrl || null
+      },
     });
 
     const defaultHours = [
@@ -39,7 +53,7 @@ app.post('/tenant', async (req: Request, res: Response) => {
 
     return res.status(201).json(newTenant);
   } catch (error) {
-    return res.status(400).json({ error: 'Erro ao criar estabelecimento' });
+    return res.status(400).json({ error: 'Erro ao criar estabelecimento ou slug já em uso.' });
   }
 });
 
@@ -52,14 +66,43 @@ app.get('/tenants', async (req: Request, res: Response) => {
   }
 });
 
-app.get('/tenant/:id', async (req: Request, res: Response) => {
+app.get('/tenant/:identifier', async (req: Request, res: Response) => {
   try {
-    const { id } = req.params;
-    const tenant = await prisma.tenant.findUnique({ where: { id } });
+    const { identifier } = req.params;
+    let tenant = await prisma.tenant.findUnique({ where: { id: identifier } });
+    if (!tenant) {
+      tenant = await prisma.tenant.findUnique({ where: { slug: identifier } });
+    }
     if (!tenant) return res.status(404).json({ error: 'Estabelecimento não encontrado.' });
     return res.status(200).json(tenant);
   } catch (error) {
     return res.status(400).json({ error: 'Erro ao buscar estabelecimento.' });
+  }
+});
+
+app.put('/tenant/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { name, category, whatsapp, address, themeColor, logoUrl, slug } = req.body;
+    
+    const existing = await prisma.tenant.findUnique({ where: { id } });
+    if (!existing) return res.status(404).json({ error: 'Estabelecimento não encontrado.' });
+
+    const updated = await prisma.tenant.update({
+      where: { id },
+      data: { 
+        name: name !== undefined ? name : existing.name, 
+        slug: slug !== undefined ? slug.toLowerCase().replace(/[^a-z0-9]/g, '-') : existing.slug,
+        category: category !== undefined ? category : existing.category, 
+        whatsapp: whatsapp !== undefined ? whatsapp : existing.whatsapp, 
+        address: address !== undefined ? address : existing.address, 
+        themeColor: themeColor !== undefined ? themeColor : existing.themeColor,
+        logoUrl: logoUrl !== undefined ? logoUrl : existing.logoUrl
+      },
+    });
+    return res.status(200).json(updated);
+  } catch (error) {
+    return res.status(400).json({ error: 'Erro ao atualizar estabelecimento' });
   }
 });
 
@@ -302,10 +345,55 @@ app.delete('/professional/:id', async (req: Request, res: Response) => {
 app.post('/customer', async (req: Request, res: Response) => {
   try {
     const { name, phone, tenantId } = req.body;
-    const newCustomer = await prisma.customer.create({ data: { name, phone, tenantId } });
-    return res.status(201).json(newCustomer);
+    const cleanPhone = String(phone).replace(/\D/g, '');
+    
+    let customer = await prisma.customer.findFirst({ 
+      where: { tenantId, phone: { contains: cleanPhone } } 
+    });
+
+    if (!customer) {
+      customer = await prisma.customer.create({ data: { name, phone: cleanPhone, tenantId } });
+    } else {
+      customer = await prisma.customer.update({
+        where: { id: customer.id },
+        data: { name, phone: cleanPhone }
+      });
+    }
+
+    return res.status(201).json(customer);
   } catch (error) {
-    return res.status(400).json({ error: 'Erro ao criar cliente.' });
+    return res.status(400).json({ error: 'Erro ao criar ou buscar cliente.' });
+  }
+});
+
+// Rota de Histórico Otimizada (busca limpando os números)
+app.get('/customer-appointments/:tenantId', async (req: Request, res: Response) => {
+  try {
+    const { tenantId } = req.params;
+    const { phone } = req.query;
+
+    if (!phone) return res.status(400).json({ error: 'Telefone obrigatório.' });
+
+    const cleanSearchPhone = String(phone).replace(/\D/g, '');
+
+    // Busca todos os clientes do tenant e filtra no JS os que contêm os dígitos informados
+    const allCustomers = await prisma.customer.findMany({ where: { tenantId } });
+    const matchedCustomers = allCustomers.filter(c => c.phone.replace(/\D/g, '').includes(cleanSearchPhone));
+    const customerIds = matchedCustomers.map(c => c.id);
+
+    if (customerIds.length === 0) {
+      return res.status(200).json([]);
+    }
+
+    const appointments = await prisma.appointment.findMany({
+      where: { tenantId, customerId: { in: customerIds } },
+      include: { service: true, professional: true, customer: true },
+      orderBy: { date: 'desc' },
+    });
+
+    return res.status(200).json(appointments);
+  } catch (error) {
+    return res.status(500).json({ error: 'Erro ao buscar histórico.' });
   }
 });
 
