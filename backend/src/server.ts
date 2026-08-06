@@ -3,7 +3,6 @@ import cors from 'cors';
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
-import { google } from 'googleapis';
 
 const app = express();
 const prisma = new PrismaClient();
@@ -17,7 +16,6 @@ app.get('/', (req: Request, res: Response) => {
 });
 
 // --- TENANTS ---
-
 app.post('/tenant', async (req: Request, res: Response) => {
   try {
     const { name, category, whatsapp, address, closingHour } = req.body;
@@ -87,7 +85,6 @@ app.delete('/tenant/:id', async (req: Request, res: Response) => {
 });
 
 // --- BUSINESS HOURS ---
-
 app.get('/business-hours/:tenantId', async (req: Request, res: Response) => {
   try {
     const { tenantId } = req.params;
@@ -113,7 +110,6 @@ app.put('/business-hour/:id', async (req: Request, res: Response) => {
 });
 
 // --- PROFESSIONAL HOURS ---
-
 app.get('/professional-hours/:professionalId', async (req: Request, res: Response) => {
   try {
     const { professionalId } = req.params;
@@ -155,8 +151,7 @@ app.put('/professional-hour/:id', async (req: Request, res: Response) => {
   }
 });
 
-// --- AUTH ---
-
+// --- AUTH & LOGIN ---
 app.post('/user', async (req: Request, res: Response) => {
   try {
     const { name, email, password, tenantId } = req.body;
@@ -191,6 +186,7 @@ app.post('/login', async (req: Request, res: Response) => {
         email: user.email,
         tenantId: user.tenantId,
         tenantName: user.tenant ? user.tenant.name : 'Super Admin',
+        role: 'admin',
       },
     });
   } catch (error) {
@@ -198,8 +194,36 @@ app.post('/login', async (req: Request, res: Response) => {
   }
 });
 
-// --- SERVICES ---
+app.post('/professional-login', async (req: Request, res: Response) => {
+  try {
+    const { email, password } = req.body;
+    const professional = await prisma.professional.findUnique({
+      where: { email },
+      include: { tenant: true },
+    });
+    if (!professional || !professional.password) {
+      return res.status(401).json({ error: 'E-mail ou senha inválidos.' });
+    }
+    const passwordMatch = await bcrypt.compare(password, professional.password);
+    if (!passwordMatch) {
+      return res.status(401).json({ error: 'E-mail ou senha inválidos.' });
+    }
+    return res.status(200).json({
+      user: {
+        id: professional.id,
+        name: professional.name,
+        email: professional.email,
+        tenantId: professional.tenantId,
+        tenantName: professional.tenant.name,
+        role: 'professional',
+      }
+    });
+  } catch (error) {
+    return res.status(500).json({ error: 'Erro no login do profissional.' });
+  }
+});
 
+// --- SERVICES ---
 app.post('/service', async (req: Request, res: Response) => {
   try {
     const { name, duration, price, tenantId } = req.body;
@@ -225,7 +249,6 @@ app.get('/services/:tenantId', async (req: Request, res: Response) => {
 app.delete('/service/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    // Opcional: define serviceId como null nos agendamentos antigos para não quebrar integridade
     await prisma.appointment.updateMany({
       where: { serviceId: id },
       data: { serviceId: null },
@@ -238,11 +261,16 @@ app.delete('/service/:id', async (req: Request, res: Response) => {
 });
 
 // --- PROFESSIONALS ---
-
 app.post('/professional', async (req: Request, res: Response) => {
   try {
-    const { name, nickname, avatarUrl, tenantId } = req.body;
-    const newProf = await prisma.professional.create({ data: { name, nickname, avatarUrl, tenantId } });
+    const { name, nickname, avatarUrl, email, password, tenantId } = req.body;
+    let hashedPassword = null;
+    if (password) {
+      hashedPassword = await bcrypt.hash(password, 10);
+    }
+    const newProf = await prisma.professional.create({
+      data: { name, nickname, avatarUrl: avatarUrl || null, email: email || null, password: hashedPassword, tenantId }
+    });
     return res.status(201).json(newProf);
   } catch (error) {
     return res.status(400).json({ error: 'Erro ao cadastrar profissional.' });
@@ -270,8 +298,7 @@ app.delete('/professional/:id', async (req: Request, res: Response) => {
   }
 });
 
-// --- CUSTOMERS & APPOINTMENTS ---
-
+// --- CUSTOMERS & CRM & APPOINTMENTS ---
 app.post('/customer', async (req: Request, res: Response) => {
   try {
     const { name, phone, tenantId } = req.body;
@@ -279,6 +306,36 @@ app.post('/customer', async (req: Request, res: Response) => {
     return res.status(201).json(newCustomer);
   } catch (error) {
     return res.status(400).json({ error: 'Erro ao criar cliente.' });
+  }
+});
+
+app.get('/customers-report/:tenantId', async (req: Request, res: Response) => {
+  try {
+    const { tenantId } = req.params;
+    const customers = await prisma.customer.findMany({
+      where: { tenantId },
+      include: {
+        appointments: {
+          include: { service: true }
+        }
+      },
+      orderBy: { name: 'asc' }
+    });
+    const formatted = customers.map(c => {
+      const totalAppointments = c.appointments.length;
+      const totalSpent = c.appointments.reduce((acc, app) => acc + (app.service?.price || 0), 0);
+      return {
+        id: c.id,
+        name: c.name,
+        phone: c.phone,
+        totalAppointments,
+        totalSpent,
+        lastAppointment: c.appointments.length > 0 ? c.appointments[c.appointments.length - 1].date : null
+      };
+    });
+    return res.status(200).json(formatted);
+  } catch (error) {
+    return res.status(500).json({ error: 'Erro ao buscar relatório de clientes.' });
   }
 });
 

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  Building2, Calendar, Scissors, Users, LogOut, Trash2, 
-  Clock, CheckCircle, XCircle, MessageSquare, Settings, ShieldCheck 
+  Building2, Calendar, Briefcase, Users, LogOut, Trash2, 
+  Clock, CheckCircle, XCircle, MessageSquare, Settings, ShieldCheck, DollarSign, UserCheck 
 } from 'lucide-react';
 
 interface UserProps {
@@ -9,6 +9,8 @@ interface UserProps {
   email: string;
   tenantId: string;
   tenantName: string;
+  role?: string;
+  id?: string;
 }
 
 interface DashboardProps {
@@ -28,6 +30,7 @@ interface Professional {
   name: string;
   nickname: string;
   avatarUrl: string;
+  email?: string;
 }
 
 interface Appointment {
@@ -35,8 +38,18 @@ interface Appointment {
   date: string;
   customer: { name: string; phone: string };
   service: { name: string; price: number };
-  professional?: { name: string; nickname?: string };
+  professional?: { id: string; name: string; nickname?: string };
+  professionalId?: string;
   whatsappLink?: string;
+}
+
+interface CustomerReport {
+  id: string;
+  name: string;
+  phone: string;
+  totalAppointments: number;
+  totalSpent: number;
+  lastAppointment: string | null;
 }
 
 interface BusinessHour {
@@ -55,12 +68,17 @@ const DAYS_OF_WEEK = [
 ];
 
 export function Dashboard({ user, onLogout }: DashboardProps) {
-  const [activeTab, setActiveTab] = useState<'appointments' | 'services' | 'professionals' | 'hours' | 'profHours'>('appointments');
+  const isProfessional = user?.role === 'professional';
+
+  const [activeTab, setActiveTab] = useState<
+    'appointments' | 'services' | 'professionals' | 'hours' | 'profHours' | 'financial' | 'customers'
+  >('appointments');
 
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [services, setServices] = useState<Service[]>([]);
   const [professionals, setProfessionals] = useState<Professional[]>([]);
   const [businessHours, setBusinessHours] = useState<BusinessHour[]>([]);
+  const [customers, setCustomers] = useState<CustomerReport[]>([]);
 
   const [selectedProfForHours, setSelectedProfForHours] = useState<string>('');
   const [profHours, setProfHours] = useState<BusinessHour[]>([]);
@@ -72,17 +90,22 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
   const [newProfName, setNewProfName] = useState('');
   const [newProfNickname, setNewProfNickname] = useState('');
   const [newProfAvatar, setNewProfAvatar] = useState('');
+  const [newProfEmail, setNewProfEmail] = useState('');
+  const [newProfPassword, setNewProfPassword] = useState('');
 
   const tenantId = user?.tenantId;
 
   useEffect(() => {
     if (tenantId) {
       fetchAppointments();
-      fetchServices();
-      fetchProfessionals();
-      fetchBusinessHours();
+      if (!isProfessional) {
+        fetchServices();
+        fetchProfessionals();
+        fetchBusinessHours();
+        fetchCustomers();
+      }
     }
-  }, [tenantId]);
+  }, [tenantId, isProfessional]);
 
   useEffect(() => {
     if (professionals.length > 0 && !selectedProfForHours) {
@@ -103,7 +126,12 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
     try {
       const res = await fetch(`http://localhost:3000/appointments/${tenantId}`);
       if (res.ok) {
-        const data = await res.json();
+        let data = await res.json();
+        
+        if (isProfessional && user?.id) {
+          data = data.filter((app: any) => app.professionalId === user.id);
+        }
+
         const enhancedData = data.map((app: any) => {
           if (!app.whatsappLink && app.customer) {
             const dateObj = new Date(app.date);
@@ -144,6 +172,14 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
     } catch (err) { console.error(err); }
   }
 
+  async function fetchCustomers() {
+    if (!tenantId) return;
+    try {
+      const res = await fetch(`http://localhost:3000/customers-report/${tenantId}`);
+      if (res.ok) setCustomers(await res.json());
+    } catch (err) { console.error(err); }
+  }
+
   async function fetchProfHours(profId: string) {
     try {
       const res = await fetch(`http://localhost:3000/professional-hours/${profId}`);
@@ -167,17 +203,9 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
   async function handleDeleteService(serviceId: string, serviceName: string) {
     if (!confirm(`Deseja realmente excluir o serviço "${serviceName}"?`)) return;
     try {
-      const res = await fetch(`http://localhost:3000/service/${serviceId}`, {
-        method: 'DELETE',
-      });
-      if (res.ok) {
-        fetchServices();
-      } else {
-        alert('Erro ao excluir serviço.');
-      }
-    } catch (err) {
-      alert('Erro de conexão ao excluir serviço.');
-    }
+      const res = await fetch(`http://localhost:3000/service/${serviceId}`, { method: 'DELETE' });
+      if (res.ok) fetchServices();
+    } catch (err) { alert('Erro ao excluir serviço.'); }
   }
 
   async function handleCreateProfessional(e: React.FormEvent) {
@@ -187,27 +215,37 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
       const res = await fetch('http://localhost:3000/professional', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: newProfName, nickname: newProfNickname, avatarUrl: newProfAvatar, tenantId }),
+        body: JSON.stringify({ 
+          name: newProfName, 
+          nickname: newProfNickname, 
+          avatarUrl: newProfAvatar, 
+          email: newProfEmail || null,
+          password: newProfPassword || null,
+          tenantId 
+        }),
       });
-      if (res.ok) { setNewProfName(''); setNewProfNickname(''); setNewProfAvatar(''); fetchProfessionals(); }
+      if (res.ok) { 
+        setNewProfName(''); 
+        setNewProfNickname(''); 
+        setNewProfAvatar(''); 
+        setNewProfEmail(''); 
+        setNewProfPassword(''); 
+        fetchProfessionals(); 
+      } else {
+        alert('Erro ao cadastrar profissional.');
+      }
     } catch (err) { alert('Erro ao cadastrar profissional'); }
   }
 
   async function handleDeleteProfessional(profId: string, profName: string) {
     if (!confirm(`Deseja realmente excluir o profissional ${profName}?`)) return;
     try {
-      const res = await fetch(`http://localhost:3000/professional/${profId}`, {
-        method: 'DELETE',
-      });
+      const res = await fetch(`http://localhost:3000/professional/${profId}`, { method: 'DELETE' });
       if (res.ok) {
         fetchProfessionals();
         fetchAppointments();
-      } else {
-        alert('Erro ao excluir profissional.');
       }
-    } catch (err) {
-      alert('Erro de conexão ao excluir.');
-    }
+    } catch (err) { alert('Erro de conexão ao excluir.'); }
   }
 
   async function handleUpdateBusinessHour(hourId: string, updatedData: Partial<BusinessHour>) {
@@ -242,9 +280,47 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
     if (!confirm('Deseja realmente cancelar este agendamento?')) return;
     try {
       const res = await fetch(`http://localhost:3000/appointment/${id}`, { method: 'DELETE' });
-      if (res.ok) fetchAppointments();
+      if (res.ok) {
+        fetchAppointments();
+        if (!isProfessional) fetchCustomers();
+      }
     } catch (err) { alert('Erro ao cancelar agendamento'); }
   }
+
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+
+  const futureAppointments = appointments.filter((app) => {
+    const appDate = new Date(app.date);
+    return appDate >= now;
+  });
+
+  const groupedByDay: { [key: string]: Appointment[] } = {};
+  futureAppointments.forEach((app) => {
+    const dStr = new Date(app.date).toISOString().split('T')[0];
+    if (!groupedByDay[dStr]) groupedByDay[dStr] = [];
+    groupedByDay[dStr].push(app);
+  });
+
+  const sortedDays = Object.keys(groupedByDay).sort();
+
+  function getDayLabel(dateString: string) {
+    const todayStr = new Date().toISOString().split('T')[0];
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomorrowStr = tomorrow.toISOString().split('T')[0];
+
+    if (dateString === todayStr) return '📅 Hoje';
+    if (dateString === tomorrowStr) return '📅 Amanhã';
+
+    const [year, month, day] = dateString.split('-');
+    const dateObj = new Date(Number(year), Number(month) - 1, Number(day));
+    return `📅 ${dateObj.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: '2-digit' })}`;
+  }
+
+  const totalRevenue = appointments.reduce((acc, app) => acc + (app.service?.price || 0), 0);
+  const totalAppointmentsCount = appointments.length;
+  const averageTicket = totalAppointmentsCount > 0 ? totalRevenue / totalAppointmentsCount : 0;
 
   if (!user) return <div className="min-h-screen bg-[#0f172a] text-slate-100 flex items-center justify-center">Carregando dados...</div>;
 
@@ -257,7 +333,9 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
           </div>
           <div>
             <h1 className="text-xl font-bold text-white">{user.tenantName}</h1>
-            <p className="text-xs text-slate-400">Painel do Estabelecimento • Logado como: {user.name}</p>
+            <p className="text-xs text-slate-400">
+              {isProfessional ? `Painel do Profissional • ${user.name}` : `Painel do Estabelecimento • Logado como: ${user.name}`}
+            </p>
           </div>
         </div>
         <button onClick={onLogout} className="bg-slate-800 hover:bg-slate-700 text-slate-200 px-4 py-2 rounded-xl text-xs font-medium transition-colors flex items-center gap-2">
@@ -268,77 +346,99 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
       {/* Navegação por Abas */}
       <div className="border-b border-slate-800 bg-[#1e293b]/20 px-6 flex gap-4 overflow-x-auto">
         <button onClick={() => setActiveTab('appointments')} className={`py-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap ${activeTab === 'appointments' ? 'border-emerald-500 text-emerald-400' : 'border-transparent text-slate-400 hover:text-slate-200'}`}>
-          <Calendar className="w-4 h-4" /> Agendamentos ({appointments.length})
+          <Calendar className="w-4 h-4" /> Agendamentos Ativos ({futureAppointments.length})
         </button>
-        <button onClick={() => setActiveTab('services')} className={`py-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap ${activeTab === 'services' ? 'border-emerald-500 text-emerald-400' : 'border-transparent text-slate-400 hover:text-slate-200'}`}>
-          <Scissors className="w-4 h-4" /> Serviços ({services.length})
-        </button>
-        <button onClick={() => setActiveTab('professionals')} className={`py-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap ${activeTab === 'professionals' ? 'border-emerald-500 text-emerald-400' : 'border-transparent text-slate-400 hover:text-slate-200'}`}>
-          <Users className="w-4 h-4" /> Profissionais ({professionals.length})
-        </button>
-        <button onClick={() => setActiveTab('hours')} className={`py-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap ${activeTab === 'hours' ? 'border-emerald-500 text-emerald-400' : 'border-transparent text-slate-400 hover:text-slate-200'}`}>
-          <Clock className="w-4 h-4" /> Expediente Geral
-        </button>
-        <button onClick={() => setActiveTab('profHours')} className={`py-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap ${activeTab === 'profHours' ? 'border-emerald-500 text-emerald-400' : 'border-transparent text-slate-400 hover:text-slate-200'}`}>
-          <Settings className="w-4 h-4" /> Horários por Profissional
-        </button>
+
+        {!isProfessional && (
+          <>
+            <button onClick={() => setActiveTab('services')} className={`py-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap ${activeTab === 'services' ? 'border-emerald-500 text-emerald-400' : 'border-transparent text-slate-400 hover:text-slate-200'}`}>
+              <Briefcase className="w-4 h-4" /> Serviços ({services.length})
+            </button>
+            <button onClick={() => setActiveTab('professionals')} className={`py-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap ${activeTab === 'professionals' ? 'border-emerald-500 text-emerald-400' : 'border-transparent text-slate-400 hover:text-slate-200'}`}>
+              <Users className="w-4 h-4" /> Profissionais ({professionals.length})
+            </button>
+            <button onClick={() => setActiveTab('hours')} className={`py-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap ${activeTab === 'hours' ? 'border-emerald-500 text-emerald-400' : 'border-transparent text-slate-400 hover:text-slate-200'}`}>
+              <Clock className="w-4 h-4" /> Expediente Geral
+            </button>
+            <button onClick={() => setActiveTab('profHours')} className={`py-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap ${activeTab === 'profHours' ? 'border-emerald-500 text-emerald-400' : 'border-transparent text-slate-400 hover:text-slate-200'}`}>
+              <Settings className="w-4 h-4" /> Horários por Profissional
+            </button>
+            <button onClick={() => setActiveTab('financial')} className={`py-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap ${activeTab === 'financial' ? 'border-emerald-500 text-emerald-400' : 'border-transparent text-slate-400 hover:text-slate-200'}`}>
+              <DollarSign className="w-4 h-4" /> Faturamento
+            </button>
+            <button onClick={() => setActiveTab('customers')} className={`py-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap ${activeTab === 'customers' ? 'border-emerald-500 text-emerald-400' : 'border-transparent text-slate-400 hover:text-slate-200'}`}>
+              <UserCheck className="w-4 h-4" /> Clientes (CRM)
+            </button>
+          </>
+        )}
       </div>
 
-      <main className="flex-1 p-6 max-w-6xl mx-auto w-full space-y-6">
+      <main className="flex-1 p-6 max-w-6xl mx-auto w-full space-y-8">
         
-        {/* ABA: AGENDAMENTOS */}
+        {/* ABA: AGENDAMENTOS SEPARADOS POR DIAS */}
         {activeTab === 'appointments' && (
-          <div className="space-y-4">
+          <div className="space-y-6">
             <h2 className="text-lg font-bold">Agenda de Atendimentos</h2>
-            {appointments.length === 0 ? (
-              <div className="text-center py-16 bg-[#1e293b] border border-slate-800 rounded-2xl text-slate-500 text-xs">Nenhum agendamento registrado.</div>
+            {sortedDays.length === 0 ? (
+              <div className="text-center py-16 bg-[#1e293b] border border-slate-800 rounded-2xl text-slate-500 text-xs">Nenhum agendamento futuro encontrado.</div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {appointments.map((app) => {
-                  const dateObj = new Date(app.date);
-                  return (
-                    <div key={app.id} className="bg-[#1e293b] border border-slate-800 p-5 rounded-2xl flex flex-col justify-between space-y-4 shadow-md">
-                      <div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs bg-emerald-500/10 text-emerald-400 px-2.5 py-1 rounded-md font-mono font-bold border border-emerald-500/20">
-                            {dateObj.toLocaleDateString('pt-BR')} às {dateObj.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                          </span>
-                          <button onClick={() => handleCancelAppointment(app.id)} className="text-red-400 hover:text-red-300 p-1 text-xs flex items-center gap-1 font-medium">
-                            <Trash2 className="w-3.5 h-3.5" /> Cancelar
-                          </button>
-                        </div>
-                        <h3 className="font-bold text-white text-base mt-3">{app.service?.name || 'Atendimento'}</h3>
-                        <p className="text-xs text-slate-400 mt-1">👤 Cliente: <strong className="text-slate-200">{app.customer?.name}</strong> ({app.customer?.phone})</p>
-                        {app.professional && (
-                          <p className="text-xs text-slate-400 mt-0.5">✂️ Profissional: <strong className="text-slate-200">{app.professional.name}</strong></p>
-                        )}
-                      </div>
+              sortedDays.map((dayStr) => (
+                <div key={dayStr} className="space-y-3">
+                  <div className="flex items-center gap-3">
+                    <h3 className="text-sm font-bold text-emerald-400 uppercase tracking-wider bg-emerald-500/10 px-3 py-1.5 rounded-xl border border-emerald-500/20">
+                      {getDayLabel(dayStr)}
+                    </h3>
+                    <div className="flex-1 h-[1px] bg-slate-800"></div>
+                  </div>
 
-                      {app.whatsappLink && (
-                        <div className="pt-2 border-t border-slate-800 flex items-center justify-between">
-                          <span className="text-[10px] text-slate-400">Lembrete WhatsApp pronto:</span>
-                          <a href={app.whatsappLink} target="_blank" rel="noopener noreferrer" className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold px-3 py-1.5 rounded-xl text-xs flex items-center gap-1.5 transition-colors shadow-md shadow-emerald-500/10">
-                            <MessageSquare className="w-3.5 h-3.5 text-slate-950" /> Enviar Lembrete
-                          </a>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {groupedByDay[dayStr].map((app) => {
+                      const dateObj = new Date(app.date);
+                      return (
+                        <div key={app.id} className="bg-[#1e293b] border border-slate-800 p-5 rounded-2xl flex flex-col justify-between space-y-4 shadow-md">
+                          <div>
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs bg-slate-900 text-emerald-300 px-2.5 py-1 rounded-md font-mono font-bold border border-slate-700">
+                                ⏰ {dateObj.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                              <button onClick={() => handleCancelAppointment(app.id)} className="text-red-400 hover:text-red-300 p-1 text-xs flex items-center gap-1 font-medium">
+                                <Trash2 className="w-3.5 h-3.5" /> Cancelar
+                              </button>
+                            </div>
+                            <h4 className="font-bold text-white text-base mt-3">{app.service?.name || 'Atendimento'}</h4>
+                            <p className="text-xs text-slate-400 mt-1">👤 Cliente: <strong className="text-slate-200">{app.customer?.name}</strong> ({app.customer?.phone})</p>
+                            {app.professional && !isProfessional && (
+                              <p className="text-xs text-slate-400 mt-0.5">👤 Profissional: <strong className="text-slate-200">{app.professional.name}</strong></p>
+                            )}
+                          </div>
+
+                          {app.whatsappLink && (
+                            <div className="pt-2 border-t border-slate-800 flex items-center justify-between">
+                              <span className="text-[10px] text-slate-400">Lembrete WhatsApp pronto:</span>
+                              <a href={app.whatsappLink} target="_blank" rel="noopener noreferrer" className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold px-3 py-1.5 rounded-xl text-xs flex items-center gap-1.5 transition-colors shadow-md shadow-emerald-500/10">
+                                <MessageSquare className="w-3.5 h-3.5 text-slate-950" /> Enviar Lembrete
+                              </a>
+                            </div>
+                          )}
                         </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))
             )}
           </div>
         )}
 
         {/* ABA: SERVIÇOS */}
-        {activeTab === 'services' && (
+        {activeTab === 'services' && !isProfessional && (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="bg-[#1e293b] border border-slate-800 p-6 rounded-2xl h-fit space-y-4">
               <h3 className="font-bold text-sm">Novo Serviço</h3>
               <form onSubmit={handleCreateService} className="space-y-3">
                 <div>
                   <label className="block text-xs text-slate-400 mb-1">Nome do Serviço</label>
-                  <input type="text" required value={newServiceName} onChange={(e) => setNewServiceName(e.target.value)} placeholder="" className="w-full bg-[#0f172a] border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:border-emerald-500 focus:outline-none" />
+                  <input type="text" required value={newServiceName} onChange={(e) => setNewServiceName(e.target.value)} className="w-full bg-[#0f172a] border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:border-emerald-500 focus:outline-none" />
                 </div>
                 <div>
                   <label className="block text-xs text-slate-400 mb-1">Duração (minutos)</label>
@@ -346,7 +446,7 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
                 </div>
                 <div>
                   <label className="block text-xs text-slate-400 mb-1">Preço (R$)</label>
-                  <input type="number" step="0.01" required value={newServicePrice} onChange={(e) => setNewServicePrice(e.target.value)} placeholder="45.00" className="w-full bg-[#0f172a] border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:border-emerald-500 focus:outline-none" />
+                  <input type="number" step="0.01" required value={newServicePrice} onChange={(e) => setNewServicePrice(e.target.value)} className="w-full bg-[#0f172a] border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:border-emerald-500 focus:outline-none" />
                 </div>
                 <button type="submit" className="w-full bg-emerald-500 hover:bg-emerald-400 font-bold text-slate-950 py-2.5 rounded-xl text-xs transition-colors shadow-md shadow-emerald-500/10">Adicionar Serviço</button>
               </form>
@@ -364,11 +464,7 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
                         <h4 className="font-bold text-sm text-white">{s.name}</h4>
                         <p className="text-xs text-slate-400">R$ {s.price.toFixed(2)} • {s.duration} min</p>
                       </div>
-                      <button
-                        onClick={() => handleDeleteService(s.id, s.name)}
-                        className="text-red-400 hover:text-red-300 p-2 bg-red-500/10 border border-red-500/20 rounded-xl transition-colors"
-                        title="Excluir Serviço"
-                      >
+                      <button onClick={() => handleDeleteService(s.id, s.name)} className="text-red-400 hover:text-red-300 p-2 bg-red-500/10 border border-red-500/20 rounded-xl transition-colors">
                         <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
@@ -380,22 +476,26 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
         )}
 
         {/* ABA: PROFISSIONAIS */}
-        {activeTab === 'professionals' && (
+        {activeTab === 'professionals' && !isProfessional && (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="bg-[#1e293b] border border-slate-800 p-6 rounded-2xl h-fit space-y-4">
               <h3 className="font-bold text-sm">Novo Profissional</h3>
               <form onSubmit={handleCreateProfessional} className="space-y-3">
                 <div>
                   <label className="block text-xs text-slate-400 mb-1">Nome</label>
-                  <input type="text" required value={newProfName} onChange={(e) => setNewProfName(e.target.value)} placeholder="" className="w-full bg-[#0f172a] border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:border-emerald-500 focus:outline-none" />
+                  <input type="text" required value={newProfName} onChange={(e) => setNewProfName(e.target.value)} className="w-full bg-[#0f172a] border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:border-emerald-500 focus:outline-none" />
                 </div>
                 <div>
                   <label className="block text-xs text-slate-400 mb-1">Apelido / Especialidade</label>
-                  <input type="text" value={newProfNickname} onChange={(e) => setNewProfNickname(e.target.value)} placeholder="" className="w-full bg-[#0f172a] border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:border-emerald-500 focus:outline-none" />
+                  <input type="text" value={newProfNickname} onChange={(e) => setNewProfNickname(e.target.value)} className="w-full bg-[#0f172a] border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:border-emerald-500 focus:outline-none" />
                 </div>
                 <div>
-                  <label className="block text-xs text-slate-400 mb-1">Link da Foto (Avatar)</label>
-                  <input type="text" value={newProfAvatar} onChange={(e) => setNewProfAvatar(e.target.value)} placeholder="" className="w-full bg-[#0f172a] border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:border-emerald-500 focus:outline-none" />
+                  <label className="block text-xs text-slate-400 mb-1">E-mail para Login (Opcional)</label>
+                  <input type="email" value={newProfEmail} onChange={(e) => setNewProfEmail(e.target.value)} className="w-full bg-[#0f172a] border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:border-emerald-500 focus:outline-none" />
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1">Senha de Acesso (Opcional)</label>
+                  <input type="password" value={newProfPassword} onChange={(e) => setNewProfPassword(e.target.value)} className="w-full bg-[#0f172a] border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:border-emerald-500 focus:outline-none" />
                 </div>
                 <button type="submit" className="w-full bg-emerald-500 hover:bg-emerald-400 font-bold text-slate-950 py-2.5 rounded-xl text-xs transition-colors shadow-md shadow-emerald-500/10">Cadastrar Profissional</button>
               </form>
@@ -414,13 +514,10 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
                         <div>
                           <h4 className="font-bold text-sm text-white">{p.name}</h4>
                           {p.nickname && <p className="text-xs text-slate-400">{p.nickname}</p>}
+                          {p.email && <p className="text-[10px] text-emerald-400 mt-0.5">Acesso liberado</p>}
                         </div>
                       </div>
-                      <button
-                        onClick={() => handleDeleteProfessional(p.id, p.name)}
-                        className="text-red-400 hover:text-red-300 p-2 bg-red-500/10 border border-red-500/20 rounded-xl transition-colors"
-                        title="Excluir Profissional"
-                      >
+                      <button onClick={() => handleDeleteProfessional(p.id, p.name)} className="text-red-400 hover:text-red-300 p-2 bg-red-500/10 border border-red-500/20 rounded-xl transition-colors">
                         <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
@@ -432,7 +529,7 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
         )}
 
         {/* ABA: EXPEDIENTE GERAL */}
-        {activeTab === 'hours' && (
+        {activeTab === 'hours' && !isProfessional && (
           <div className="space-y-4">
             <div>
               <h2 className="text-lg font-bold">Expediente Geral do Estabelecimento</h2>
@@ -459,12 +556,6 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
                         <span className="text-slate-500 mr-1">Fecha:</span>
                         <input type="time" value={h.closeTime} onChange={(e) => handleUpdateBusinessHour(h.id, { closeTime: e.target.value })} className="bg-[#0f172a] border border-slate-800 rounded-lg px-2 py-1 text-white font-mono focus:border-emerald-500 focus:outline-none" />
                       </div>
-                      <div className="border-l border-slate-800 pl-3 flex items-center gap-2">
-                        <span className="text-slate-500">Almoço:</span>
-                        <input type="time" value={h.lunchStart || ''} onChange={(e) => handleUpdateBusinessHour(h.id, { lunchStart: e.target.value })} className="bg-[#0f172a] border border-slate-800 rounded-lg px-2 py-1 text-white font-mono focus:border-emerald-500 focus:outline-none" />
-                        <span>às</span>
-                        <input type="time" value={h.lunchEnd || ''} onChange={(e) => handleUpdateBusinessHour(h.id, { lunchEnd: e.target.value })} className="bg-[#0f172a] border border-slate-800 rounded-lg px-2 py-1 text-white font-mono focus:border-emerald-500 focus:outline-none" />
-                      </div>
                     </div>
                   )}
                 </div>
@@ -474,7 +565,7 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
         )}
 
         {/* ABA: HORÁRIOS POR PROFISSIONAL */}
-        {activeTab === 'profHours' && (
+        {activeTab === 'profHours' && !isProfessional && (
           <div className="space-y-6">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div>
@@ -521,16 +612,64 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
                           <span className="text-slate-500 mr-1">Fim:</span>
                           <input type="time" value={h.closeTime} onChange={(e) => handleUpdateProfHour(h.id, { closeTime: e.target.value })} className="bg-[#0f172a] border border-slate-800 rounded-lg px-2 py-1 text-white font-mono focus:border-emerald-500 focus:outline-none" />
                         </div>
-                        <div className="border-l border-slate-800 pl-3 flex items-center gap-2">
-                          <span className="text-slate-500">Almoço:</span>
-                          <input type="time" value={h.lunchStart || ''} onChange={(e) => handleUpdateProfHour(h.id, { lunchStart: e.target.value })} className="bg-[#0f172a] border border-slate-800 rounded-lg px-2 py-1 text-white font-mono focus:border-emerald-500 focus:outline-none" />
-                          <span>às</span>
-                          <input type="time" value={h.lunchEnd || ''} onChange={(e) => handleUpdateProfHour(h.id, { lunchEnd: e.target.value })} className="bg-[#0f172a] border border-slate-800 rounded-lg px-2 py-1 text-white font-mono focus:border-emerald-500 focus:outline-none" />
-                        </div>
                       </div>
                     )}
                   </div>
                 ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ABA: FATURAMENTO */}
+        {activeTab === 'financial' && !isProfessional && (
+          <div className="space-y-6">
+            <h2 className="text-lg font-bold">Métricas de Faturamento</h2>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="bg-[#1e293b] border border-slate-800 p-6 rounded-2xl">
+                <p className="text-xs uppercase tracking-wider text-slate-400">Faturamento Total</p>
+                <p className="text-2xl font-bold text-emerald-400 mt-2">R$ {totalRevenue.toFixed(2)}</p>
+              </div>
+              <div className="bg-[#1e293b] border border-slate-800 p-6 rounded-2xl">
+                <p className="text-xs uppercase tracking-wider text-slate-400">Total de Atendimentos</p>
+                <p className="text-2xl font-bold text-white mt-2">{totalAppointmentsCount}</p>
+              </div>
+              <div className="bg-[#1e293b] border border-slate-800 p-6 rounded-2xl">
+                <p className="text-xs uppercase tracking-wider text-slate-400">Ticket Médio</p>
+                <p className="text-2xl font-bold text-emerald-400 mt-2">R$ {averageTicket.toFixed(2)}</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ABA: CLIENTES (CRM) */}
+        {activeTab === 'customers' && !isProfessional && (
+          <div className="space-y-4">
+            <h2 className="text-lg font-bold">Base de Clientes (CRM)</h2>
+            {customers.length === 0 ? (
+              <div className="text-center py-16 bg-[#1e293b] border border-slate-800 rounded-2xl text-slate-500 text-xs">Nenhum cliente cadastrado ainda.</div>
+            ) : (
+              <div className="bg-[#1e293b] border border-slate-800 rounded-2xl overflow-hidden">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="border-b border-slate-800 bg-slate-900/50 text-slate-400 uppercase tracking-wider">
+                      <th className="p-4">Cliente</th>
+                      <th className="p-4">WhatsApp</th>
+                      <th className="p-4">Atendimentos</th>
+                      <th className="p-4">Total Gasto</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800">
+                    {customers.map((c) => (
+                      <tr key={c.id} className="hover:bg-slate-800/30 transition-colors">
+                        <td className="p-4 font-bold text-white">{c.name}</td>
+                        <td className="p-4 text-slate-300">{c.phone}</td>
+                        <td className="p-4 text-slate-300">{c.totalAppointments}</td>
+                        <td className="p-4 font-mono font-bold text-emerald-400">R$ {c.totalSpent.toFixed(2)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             )}
           </div>

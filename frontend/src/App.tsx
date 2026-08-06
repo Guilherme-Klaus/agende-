@@ -27,7 +27,7 @@ export function App() {
     setError('');
 
     if (email === 'admin@agendeplus.com' && password === 'Guilherme2103@') {
-      const superAdminUser = { name: 'Super Admin', email, tenantId: 'super-admin', tenantName: 'Painel Master' };
+      const superAdminUser = { name: 'Super Admin', email, tenantId: 'super-admin', tenantName: 'Painel Master', role: 'super-admin' };
       setUser(superAdminUser);
       localStorage.setItem('agende_plus_user', JSON.stringify(superAdminUser));
       setLoading(false);
@@ -35,13 +35,30 @@ export function App() {
     }
 
     try {
-      const res = await fetch('http://localhost:3000/login', {
+      // Tenta login como admin do estabelecimento
+      let res = await fetch('http://localhost:3000/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
       });
 
-      const data = await res.json();
+      let data = await res.json();
+
+      if (res.ok) {
+        setUser(data.user);
+        localStorage.setItem('agende_plus_user', JSON.stringify(data.user));
+        setLoading(false);
+        return;
+      }
+
+      // Se falhar, tenta login como profissional
+      res = await fetch('http://localhost:3000/professional-login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+
+      data = await res.json();
 
       if (res.ok) {
         setUser(data.user);
@@ -90,7 +107,7 @@ export function App() {
                       <ShieldCheck className="w-8 h-8 text-emerald-400" />
                     </div>
                     <div>
-                      <h1 className="text-2xl font-bold tracking-tight text-white">Agende+ </h1>
+                      <h1 className="text-2xl font-bold tracking-tight text-white">Agende+</h1>
                       <p className="text-xs text-slate-400">Acesse o painel do seu estabelecimento</p>
                     </div>
                   </div>
@@ -109,7 +126,6 @@ export function App() {
                         required
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
-                        placeholder="seu@email.com"
                         className="w-full bg-[#0f172a] border border-slate-700 rounded-xl px-4 py-3 text-xs text-white focus:outline-none focus:border-emerald-500 transition-colors"
                       />
                     </div>
@@ -121,7 +137,6 @@ export function App() {
                         required
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
-                        placeholder="••••••••"
                         className="w-full bg-[#0f172a] border border-slate-700 rounded-xl px-4 py-3 text-xs text-white focus:outline-none focus:border-emerald-500 transition-colors"
                       />
                     </div>
