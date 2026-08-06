@@ -112,23 +112,20 @@ app.delete('/tenant/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     
-    // 1. Apagar agendamentos primeiro (pois dependem de customers, services e professionals)
     await prisma.appointment.deleteMany({ where: { tenantId: id } });
 
-    // 2. Apagar horários dos profissionais
     const profs = await prisma.professional.findMany({ where: { tenantId: id } });
     for (const p of profs) {
       await prisma.professionalHour.deleteMany({ where: { professionalId: p.id } });
     }
 
-    // 3. Apagar o restante das tabelas filhas na ordem correta
     await prisma.businessHour.deleteMany({ where: { tenantId: id } });
     await prisma.user.deleteMany({ where: { tenantId: id } });
     await prisma.service.deleteMany({ where: { tenantId: id } });
+    await prisma.product.deleteMany({ where: { tenantId: id } });
     await prisma.professional.deleteMany({ where: { tenantId: id } });
     await prisma.customer.deleteMany({ where: { tenantId: id } });
 
-    // 4. Por fim, apagar a empresa (Tenant)
     await prisma.tenant.delete({ where: { id } });
 
     return res.status(200).json({ message: 'Empresa removida com sucesso.' });
@@ -269,7 +266,7 @@ app.post('/professional-login', async (req: Request, res: Response) => {
         email: professional.email,
         tenantId: professional.tenantId,
         tenantName: professional.tenant.name,
-        role: 'professional',
+        role: 'professional', // Papel restrito de profissional
       }
     });
   } catch (error) {
@@ -311,6 +308,39 @@ app.delete('/service/:id', async (req: Request, res: Response) => {
     return res.status(200).json({ message: 'Serviço excluído com sucesso.' });
   } catch (error) {
     return res.status(400).json({ error: 'Erro ao excluir serviço.' });
+  }
+});
+
+// --- PRODUCTS ---
+app.post('/product', async (req: Request, res: Response) => {
+  try {
+    const { name, price, stock, tenantId } = req.body;
+    const newProduct = await prisma.product.create({
+      data: { name, price: Number(price) || 0, stock: Number(stock) || 0, tenantId },
+    });
+    return res.status(201).json(newProduct);
+  } catch (error) {
+    return res.status(400).json({ error: 'Erro ao criar produto.' });
+  }
+});
+
+app.get('/products/:tenantId', async (req: Request, res: Response) => {
+  try {
+    const { tenantId } = req.params;
+    const products = await prisma.product.findMany({ where: { tenantId }, orderBy: { name: 'asc' } });
+    return res.status(200).json(products);
+  } catch (error) {
+    return res.status(200).json([]);
+  }
+});
+
+app.delete('/product/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    await prisma.product.delete({ where: { id } });
+    return res.status(200).json({ message: 'Produto excluído com sucesso.' });
+  } catch (error) {
+    return res.status(400).json({ error: 'Erro ao excluir produto.' });
   }
 });
 
@@ -438,7 +468,7 @@ app.get('/customers-report/:tenantId', async (req: Request, res: Response) => {
 
 app.post('/appointment', async (req: Request, res: Response) => {
   try {
-    const { date, tenantId, customerId, serviceId, professionalId } = req.body;
+    const { date, tenantId, customerId, serviceId, professionalId, productIds } = req.body;
     const appointmentDate = new Date(date);
 
     const conflictingAppointment = await prisma.appointment.findFirst({
@@ -447,6 +477,18 @@ app.post('/appointment', async (req: Request, res: Response) => {
 
     if (conflictingAppointment) {
       return res.status(400).json({ error: 'Este horário já está ocupado para este profissional.' });
+    }
+
+    if (productIds && Array.isArray(productIds)) {
+      for (const prodId of productIds) {
+        const product = await prisma.product.findUnique({ where: { id: prodId } });
+        if (product && product.stock > 0) {
+          await prisma.product.update({
+            where: { id: prodId },
+            data: { stock: product.stock - 1 }
+          });
+        }
+      }
     }
 
     const newAppointment = await prisma.appointment.create({

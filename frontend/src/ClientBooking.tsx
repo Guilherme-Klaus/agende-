@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { Store, MapPin, ArrowLeft, CheckCircle2, CheckCircle, ArrowRight, History, Calendar, Trash2, Copy, QrCode, DollarSign } from 'lucide-react';
+import { Store, MapPin, ArrowLeft, CheckCircle2, CheckCircle, ArrowRight, History, Calendar, Trash2, Copy, DollarSign, Package } from 'lucide-react';
 
 interface Tenant {
   id: string;
@@ -10,7 +10,7 @@ interface Tenant {
   address: string;
   themeColor: string;
   logoUrl: string;
-  pixKey: string; // <--- Chave PIX cadastrada
+  pixKey: string;
 }
 
 interface Service {
@@ -18,6 +18,13 @@ interface Service {
   name: string;
   duration: number;
   price: number;
+}
+
+interface Product {
+  id: string;
+  name: string;
+  price: number;
+  stock: number;
 }
 
 interface Professional {
@@ -56,6 +63,7 @@ export function ClientBooking() {
   
   const [tenant, setTenant] = useState<Tenant | null>(null);
   const [services, setServices] = useState<Service[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
   const [professionals, setProfessionals] = useState<Professional[]>([]);
   const [businessHours, setBusinessHours] = useState<BusinessHour[]>([]);
   const [professionalHours, setProfessionalHours] = useState<BusinessHour[]>([]);
@@ -67,6 +75,7 @@ export function ClientBooking() {
   const [clientAppointments, setClientAppointments] = useState<AppointmentHistory[]>([]);
   
   const [selectedServiceIds, setSelectedServiceIds] = useState<string[]>([]);
+  const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
   const [selectedProfessional, setSelectedProfessional] = useState<Professional | null>(null);
   
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
@@ -91,6 +100,7 @@ export function ClientBooking() {
         const data = await res.json();
         setTenant(data);
         fetchServices(data.id);
+        fetchProducts(data.id);
         fetchProfessionals(data.id);
         fetchBusinessHours(data.id);
       }
@@ -101,6 +111,13 @@ export function ClientBooking() {
     try {
       const res = await fetch(`http://localhost:3000/services/${realTenantId}`);
       if (res.ok) setServices(await res.json());
+    } catch (err) { console.error(err); }
+  }
+
+  async function fetchProducts(realTenantId: string) {
+    try {
+      const res = await fetch(`http://localhost:3000/products/${realTenantId}`);
+      if (res.ok) setProducts(await res.json());
     } catch (err) { console.error(err); }
   }
 
@@ -220,8 +237,21 @@ export function ClientBooking() {
     }
   }
 
+  function handleToggleProduct(productId: string) {
+    if (selectedProductIds.includes(productId)) {
+      setSelectedProductIds(selectedProductIds.filter(id => id !== productId));
+    } else {
+      setSelectedProductIds([...selectedProductIds, productId]);
+    }
+  }
+
   const selectedServicesList = services.filter(s => selectedServiceIds.includes(s.id));
-  const totalPrice = selectedServicesList.reduce((acc, s) => acc + s.price, 0);
+  const selectedProductsList = products.filter(p => selectedProductIds.includes(p.id));
+  
+  const servicesPrice = selectedServicesList.reduce((acc, s) => acc + s.price, 0);
+  const productsPrice = selectedProductsList.reduce((acc, p) => acc + p.price, 0);
+  const totalPrice = servicesPrice + productsPrice;
+
   const totalDuration = selectedServicesList.reduce((acc, s) => acc + s.duration, 0);
 
   const currentDayOfWeek = new Date(selectedDate + 'T00:00:00').getDay();
@@ -315,6 +345,7 @@ export function ClientBooking() {
           customerId: customerData.id,
           serviceId: selectedServiceIds[0],
           professionalId: assignedProfessionalId,
+          productIds: selectedProductIds, // <--- Envia os IDs dos produtos para descontar o estoque
         }),
       });
 
@@ -391,7 +422,7 @@ export function ClientBooking() {
                 <Calendar className="w-8 h-8" />
               </div>
               <h2 className="text-lg font-bold text-white group-hover:text-emerald-400 transition-colors">Novo Agendamento</h2>
-              <p className="text-xs text-slate-400">Escolha os serviços e horários disponíveis para marcar seu atendimento.</p>
+              <p className="text-xs text-slate-400">Escolha os serviços, produtos de balcão e horários disponíveis.</p>
             </div>
 
             <div className="bg-[#1e293b] border border-slate-800 p-8 rounded-3xl space-y-4 shadow-xl">
@@ -468,65 +499,120 @@ export function ClientBooking() {
         )}
 
         {mode === 'services' && step === 'services' && (
-          <div className="space-y-6">
+          <div className="space-y-8">
             <div className="flex items-center justify-between">
               <button onClick={() => setMode('home')} className={`text-xs hover:underline flex items-center gap-1 font-medium ${activeTheme.text}`}>
                 <ArrowLeft className="w-4 h-4" /> Voltar
               </button>
-              {selectedServiceIds.length > 0 && (
+              {(selectedServiceIds.length > 0 || selectedProductIds.length > 0) && (
                 <button 
                   onClick={() => setStep('booking')}
                   className={`font-bold px-6 py-2.5 rounded-xl text-xs transition-colors shadow-md flex items-center gap-2 ${activeTheme.primary} ${activeTheme.shadow}`}
                 >
-                  Continuar ({selectedServiceIds.length}) <ArrowRight className="w-4 h-4" />
+                  Continuar (R$ {totalPrice.toFixed(2)}) <ArrowRight className="w-4 h-4" />
                 </button>
               )}
             </div>
 
-            <h2 className="text-lg font-bold">Selecione os Serviços</h2>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {services.map((service) => {
-                const isSelected = selectedServiceIds.includes(service.id);
-                return (
-                  <div 
-                    key={service.id} 
-                    onClick={() => handleToggleService(service.id)}
-                    className={`p-5 rounded-2xl border cursor-pointer transition-all flex items-center justify-between shadow-md ${
-                      isSelected ? `${activeTheme.bgSoft} ${activeTheme.border}` : 'bg-[#1e293b] border-slate-800 hover:border-slate-700'
-                    }`}
-                  >
-                    <div>
-                      <h3 className="font-bold text-white text-sm">{service.name}</h3>
-                      <p className="text-xs text-slate-400 mt-1">R$ {service.price.toFixed(2)} • {service.duration} min</p>
+            {/* SEÇÃO DE SERVIÇOS */}
+            <div className="space-y-4">
+              <h2 className="text-lg font-bold text-white">1. Selecione os Serviços</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {services.map((service) => {
+                  const isSelected = selectedServiceIds.includes(service.id);
+                  return (
+                    <div 
+                      key={service.id} 
+                      onClick={() => handleToggleService(service.id)}
+                      className={`p-5 rounded-2xl border cursor-pointer transition-all flex items-center justify-between shadow-md ${
+                        isSelected ? `${activeTheme.bgSoft} ${activeTheme.border}` : 'bg-[#1e293b] border-slate-800 hover:border-slate-700'
+                      }`}
+                    >
+                      <div>
+                        <h3 className="font-bold text-white text-sm">{service.name}</h3>
+                        <p className="text-xs text-slate-400 mt-1">R$ {service.price.toFixed(2)} • {service.duration} min</p>
+                      </div>
+                      <div className={`w-6 h-6 rounded-lg border flex items-center justify-center ${isSelected ? `${activeTheme.primary.split(' ')[0]} border-transparent text-slate-950` : 'border-slate-700 bg-[#0f172a]'}`}>
+                        {isSelected && <CheckCircle className="w-4 h-4" />}
+                      </div>
                     </div>
-                    <div className={`w-6 h-6 rounded-lg border flex items-center justify-center ${isSelected ? `${activeTheme.primary.split(' ')[0]} border-transparent text-slate-950` : 'border-slate-700 bg-[#0f172a]'}`}>
-                      {isSelected && <CheckCircle className="w-4 h-4" />}
-                    </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
+
+            {/* SEÇÃO DE PRODUTOS / BALCÃO (OPCIONAL) */}
+            {products.length > 0 && (
+              <div className="space-y-4 pt-4 border-t border-slate-800">
+                <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                  <Package className="w-5 h-5 text-emerald-400" /> 2. Produtos de Balcão (Opcional)
+                </h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {products.map((product) => {
+                    const isSelected = selectedProductIds.includes(product.id);
+                    return (
+                      <div 
+                        key={product.id} 
+                        onClick={() => handleToggleProduct(product.id)}
+                        className={`p-5 rounded-2xl border cursor-pointer transition-all flex items-center justify-between shadow-md ${
+                          isSelected ? `${activeTheme.bgSoft} ${activeTheme.border}` : 'bg-[#1e293b] border-slate-800 hover:border-slate-700'
+                        }`}
+                      >
+                        <div>
+                          <h3 className="font-bold text-white text-sm">{product.name}</h3>
+                          <p className="text-xs text-slate-400 mt-1">R$ {product.price.toFixed(2)} • Estoque disponivel</p>
+                        </div>
+                        <div className={`w-6 h-6 rounded-lg border flex items-center justify-center ${isSelected ? `${activeTheme.primary.split(' ')[0]} border-transparent text-slate-950` : 'border-slate-700 bg-[#0f172a]'}`}>
+                          {isSelected && <CheckCircle className="w-4 h-4" />}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
         {mode === 'services' && step === 'booking' && (
           <div className="bg-[#1e293b] border border-slate-800 p-6 md:p-8 rounded-3xl space-y-6 shadow-2xl">
             <button onClick={() => setStep('services')} className={`text-xs hover:underline flex items-center gap-1 font-medium ${activeTheme.text}`}>
-              <ArrowLeft className="w-4 h-4" /> Voltar e alterar serviços
+              <ArrowLeft className="w-4 h-4" /> Voltar e alterar itens
             </button>
 
             <div>
-              <h2 className="text-xl font-bold text-white">Resumo dos Serviços Escolhidos</h2>
-              <div className="flex flex-wrap gap-2 mt-2">
-                {selectedServicesList.map(s => (
-                  <span key={s.id} className={`text-xs px-3 py-1 rounded-xl border ${activeTheme.bgSoft} ${activeTheme.border} ${activeTheme.text}`}>
-                    {s.name} (R$ {s.price.toFixed(2)} • {s.duration} min)
-                  </span>
-                ))}
+              <h2 className="text-xl font-bold text-white">Resumo do Pedido</h2>
+              
+              <div className="space-y-2 mt-3">
+                {selectedServicesList.length > 0 && (
+                  <div>
+                    <p className="text-[10px] uppercase font-semibold text-slate-400">Serviços:</p>
+                    <div className="flex flex-wrap gap-2 mt-1">
+                      {selectedServicesList.map(s => (
+                        <span key={s.id} className={`text-xs px-3 py-1 rounded-xl border ${activeTheme.bgSoft} ${activeTheme.border} ${activeTheme.text}`}>
+                          {s.name} (R$ {s.price.toFixed(2)} • {s.duration} min)
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {selectedProductsList.length > 0 && (
+                  <div className="pt-2">
+                    <p className="text-[10px] uppercase font-semibold text-slate-400">Produtos de Balcão:</p>
+                    <div className="flex flex-wrap gap-2 mt-1">
+                      {selectedProductsList.map(p => (
+                        <span key={p.id} className="text-xs px-3 py-1 rounded-xl border bg-purple-500/10 border-purple-500/30 text-purple-300">
+                          {p.name} (R$ {p.price.toFixed(2)})
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
-              <p className="text-xs text-slate-400 mt-2 font-mono">
-                Total: ⏱️ {totalDuration} min | 💰 R$ {totalPrice.toFixed(2)}
+
+              <p className="text-xs text-slate-300 mt-4 font-mono font-bold bg-[#0f172a] p-3 rounded-xl border border-slate-800">
+                Resumo: ⏱️ Tempo total: {totalDuration} min | 💰 Valor Total: R$ {totalPrice.toFixed(2)}
               </p>
             </div>
 
@@ -621,7 +707,7 @@ export function ClientBooking() {
             </div>
             <div>
               <h2 className="text-xl font-bold text-white">Agendamento Confirmado!</h2>
-              <p className="text-xs text-slate-400 mt-1">Seu horário foi reservado com sucesso.</p>
+              <p className="text-xs text-slate-400 mt-1">Seu horário e itens foram reservados com sucesso.</p>
             </div>
 
             {/* CARD DE PAGAMENTO VIA PIX */}
@@ -661,11 +747,11 @@ export function ClientBooking() {
               </div>
             ) : (
               <div className="bg-[#0f172a] border border-slate-800 p-4 rounded-2xl text-slate-400 text-xs">
-                Valor Total do Atendimento: <strong className="text-white font-mono">R$ {totalPrice.toFixed(2)}</strong>
+                Valor Total (Serviços + Produtos): <strong className="text-white font-mono">R$ {totalPrice.toFixed(2)}</strong>
               </div>
             )}
 
-            <button onClick={() => { setStep('services'); setMode('home'); setSelectedServiceIds([]); setSelectedTime(''); }} className="w-full bg-slate-800 hover:bg-slate-700 text-slate-200 py-3 rounded-xl text-xs font-medium transition-colors">
+            <button onClick={() => { setStep('services'); setMode('home'); setSelectedServiceIds([]); setSelectedProductIds([]); setSelectedTime(''); }} className="w-full bg-slate-800 hover:bg-slate-700 text-slate-200 py-3 rounded-xl text-xs font-medium transition-colors">
               Voltar ao Início
             </button>
           </div>

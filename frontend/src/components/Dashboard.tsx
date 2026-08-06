@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Building2, Calendar, Briefcase, Users, LogOut, Trash2, 
-  Clock, CheckCircle, XCircle, MessageSquare, Settings, ShieldCheck, DollarSign, UserCheck, QrCode, Copy, ExternalLink, Palette 
+  Clock, CheckCircle, XCircle, MessageSquare, Settings, ShieldCheck, DollarSign, UserCheck, QrCode, Copy, ExternalLink, Palette, Package 
 } from 'lucide-react';
 
 interface UserProps {
@@ -23,6 +23,13 @@ interface Service {
   name: string;
   duration: number;
   price: number;
+}
+
+interface Product {
+  id: string;
+  name: string;
+  price: number;
+  stock: number;
 }
 
 interface Professional {
@@ -70,12 +77,14 @@ const DAYS_OF_WEEK = [
 export function Dashboard({ user, onLogout }: DashboardProps) {
   const isProfessional = user?.role === 'professional';
 
+  // Se for profissional, o painel trava estritamente na aba de agendamentos
   const [activeTab, setActiveTab] = useState<
-    'appointments' | 'services' | 'professionals' | 'hours' | 'profHours' | 'financial' | 'customers' | 'qrcode' | 'appearance' | 'settings'
+    'appointments' | 'services' | 'products' | 'professionals' | 'hours' | 'profHours' | 'financial' | 'customers' | 'qrcode' | 'appearance' | 'settings'
   >('appointments');
 
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [services, setServices] = useState<Service[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
   const [professionals, setProfessionals] = useState<Professional[]>([]);
   const [businessHours, setBusinessHours] = useState<BusinessHour[]>([]);
   const [customers, setCustomers] = useState<CustomerReport[]>([]);
@@ -87,6 +96,10 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
   const [newServiceDuration, setNewServiceDuration] = useState('30');
   const [newServicePrice, setNewServicePrice] = useState('');
 
+  const [newProdName, setNewProdName] = useState('');
+  const [newProdPrice, setNewProdPrice] = useState('');
+  const [newProdStock, setNewProdStock] = useState('10');
+
   const [newProfName, setNewProfName] = useState('');
   const [newProfNickname, setNewProfNickname] = useState('');
   const [newProfAvatar, setNewProfAvatar] = useState('');
@@ -95,7 +108,7 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
   
   const [logoPreview, setLogoPreview] = useState('');
   const [tenantSlug, setTenantSlug] = useState('');
-  const [tenantPixKey, setTenantPixKey] = useState(''); // <--- Chave PIX cadastrada
+  const [tenantPixKey, setTenantPixKey] = useState('');
   const [copied, setCopied] = useState(false);
 
   const tenantId = user?.tenantId;
@@ -108,6 +121,7 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
       fetchTenantInfo();
       if (!isProfessional) {
         fetchServices();
+        fetchProducts();
         fetchProfessionals();
         fetchBusinessHours();
         fetchCustomers();
@@ -122,7 +136,7 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
         const data = await res.json();
         if (data.logoUrl) setLogoPreview(data.logoUrl);
         if (data.slug) setTenantSlug(data.slug);
-        if (data.pixKey) setTenantPixKey(data.pixKey); // <--- Carrega a Chave PIX da API
+        if (data.pixKey) setTenantPixKey(data.pixKey);
       }
     } catch (err) { console.error(err); }
   }
@@ -176,6 +190,14 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
     } catch (err) { console.error(err); }
   }
 
+  async function fetchProducts() {
+    if (!tenantId) return;
+    try {
+      const res = await fetch(`http://localhost:3000/products/${tenantId}`);
+      if (res.ok) setProducts(await res.json());
+    } catch (err) { console.error(err); }
+  }
+
   async function fetchProfessionals() {
     if (!tenantId) return;
     try {
@@ -226,6 +248,27 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
       const res = await fetch(`http://localhost:3000/service/${serviceId}`, { method: 'DELETE' });
       if (res.ok) fetchServices();
     } catch (err) { alert('Erro ao excluir serviço.'); }
+  }
+
+  async function handleCreateProduct(e: React.FormEvent) {
+    e.preventDefault();
+    if (!tenantId) return;
+    try {
+      const res = await fetch('http://localhost:3000/product', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newProdName, price: Number(newProdPrice), stock: Number(newProdStock), tenantId }),
+      });
+      if (res.ok) { setNewProdName(''); setNewProdPrice(''); fetchProducts(); }
+    } catch (err) { alert('Erro ao cadastrar produto'); }
+  }
+
+  async function handleDeleteProduct(productId: string) {
+    if (!confirm('Deseja excluir este produto?')) return;
+    try {
+      const res = await fetch(`http://localhost:3000/product/${productId}`, { method: 'DELETE' });
+      if (res.ok) fetchProducts();
+    } catch (err) { alert('Erro ao excluir produto.'); }
   }
 
   async function handleCreateProfessional(e: React.FormEvent) {
@@ -428,7 +471,7 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
         </button>
       </header>
 
-      {/* Navegação por Abas */}
+      {/* Navegação por Abas (Se for profissional, exibe apenas a agenda) */}
       <div className="border-b border-slate-800 bg-[#1e293b]/20 px-6 flex gap-4 overflow-x-auto">
         <button onClick={() => setActiveTab('appointments')} className={`py-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap ${activeTab === 'appointments' ? 'border-emerald-500 text-emerald-400' : 'border-transparent text-slate-400 hover:text-slate-200'}`}>
           <Calendar className="w-4 h-4" /> Agendamentos Ativos ({futureAppointments.length})
@@ -438,6 +481,9 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
           <>
             <button onClick={() => setActiveTab('services')} className={`py-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap ${activeTab === 'services' ? 'border-emerald-500 text-emerald-400' : 'border-transparent text-slate-400 hover:text-slate-200'}`}>
               <Briefcase className="w-4 h-4" /> Serviços ({services.length})
+            </button>
+            <button onClick={() => setActiveTab('products')} className={`py-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap ${activeTab === 'products' ? 'border-emerald-500 text-emerald-400' : 'border-transparent text-slate-400 hover:text-slate-200'}`}>
+              <Package className="w-4 h-4" /> Produtos / Balcão ({products.length})
             </button>
             <button onClick={() => setActiveTab('professionals')} className={`py-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap ${activeTab === 'professionals' ? 'border-emerald-500 text-emerald-400' : 'border-transparent text-slate-400 hover:text-slate-200'}`}>
               <Users className="w-4 h-4" /> Profissionais ({professionals.length})
@@ -557,6 +603,50 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
                         <p className="text-xs text-slate-400">R$ {s.price.toFixed(2)} • {s.duration} min</p>
                       </div>
                       <button onClick={() => handleDeleteService(s.id, s.name)} className="text-red-400 hover:text-red-300 p-2 bg-red-500/10 border border-red-500/20 rounded-xl transition-colors">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'products' && !isProfessional && (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="bg-[#1e293b] border border-slate-800 p-6 rounded-2xl h-fit space-y-4">
+              <h3 className="font-bold text-sm">Novo Produto / Balcão</h3>
+              <form onSubmit={handleCreateProduct} className="space-y-3">
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1">Nome do Produto</label>
+                  <input type="text" required value={newProdName} onChange={(e) => setNewProdName(e.target.value)} placeholder="Ex: Pomada Modeladora" className="w-full bg-[#0f172a] border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:border-emerald-500 focus:outline-none" />
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1">Preço (R$)</label>
+                  <input type="number" step="0.01" required value={newProdPrice} onChange={(e) => setNewProdPrice(e.target.value)} placeholder="35.00" className="w-full bg-[#0f172a] border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:border-emerald-500 focus:outline-none" />
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1">Estoque Inicial</label>
+                  <input type="number" required value={newProdStock} onChange={(e) => setNewProdStock(e.target.value)} className="w-full bg-[#0f172a] border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:border-emerald-500 focus:outline-none" />
+                </div>
+                <button type="submit" className="w-full bg-emerald-500 hover:bg-emerald-400 font-bold text-slate-950 py-2.5 rounded-xl text-xs transition-colors shadow-md shadow-emerald-500/10">Cadastrar Produto</button>
+              </form>
+            </div>
+
+            <div className="md:col-span-2 space-y-3">
+              <h3 className="font-bold text-sm">Produtos Cadastrados</h3>
+              {products.length === 0 ? (
+                <div className="text-center py-12 bg-[#1e293b] border border-slate-800 rounded-2xl text-slate-500 text-xs">Nenhum produto cadastrado no balcão.</div>
+              ) : (
+                <div className="grid grid-cols-1 gap-3">
+                  {products.map((p) => (
+                    <div key={p.id} className="bg-[#1e293b] border border-slate-800 p-4 rounded-xl flex items-center justify-between gap-3">
+                      <div>
+                        <h4 className="font-bold text-sm text-white">{p.name}</h4>
+                        <p className="text-xs text-slate-400">R$ {p.price.toFixed(2)} • Estoque: {p.stock} un</p>
+                      </div>
+                      <button onClick={() => handleDeleteProduct(p.id)} className="text-red-400 hover:text-red-300 p-2 bg-red-500/10 border border-red-500/20 rounded-xl transition-colors">
                         <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
