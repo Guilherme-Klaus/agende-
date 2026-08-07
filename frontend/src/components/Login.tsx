@@ -25,8 +25,13 @@ export function Login({ onLoginSuccess, onSwitchToRegister }: LoginProps) {
       localStorage.setItem('userEmail', user.email);
 
       onLoginSuccess(token, user.tenantId, user.tenantName, user.email);
-    } catch (err) {
-      setLoginError('E-mail ou senha inválidos.');
+    } catch (err: any) {
+      // Aqui tratamos se o backend retornou mensagem customizada (como o 403 de conta bloqueada)
+      if (err.response && err.response.data && err.response.data.error) {
+        setLoginError(err.response.data.error);
+      } else {
+        setLoginError('E-mail ou senha inválidos.');
+      }
     }
   }
 
@@ -44,7 +49,7 @@ export function Login({ onLoginSuccess, onSwitchToRegister }: LoginProps) {
         </div>
 
         {loginError && (
-          <div className="bg-red-950/50 border border-red-800 text-red-200 p-3 rounded-xl mb-4 text-xs">
+          <div className="bg-red-950/50 border border-red-800 text-red-200 p-3 rounded-xl mb-4 text-xs font-medium">
             {loginError}
           </div>
         )}

@@ -51,6 +51,13 @@ export function App() {
         return;
       }
 
+      // Se o servidor retornou erro (ex: 403 Conta bloqueada ou 401 Credenciais inválidas)
+      if (res.status === 403 || res.status === 401) {
+        setError(data.error || 'E-mail ou senha inválidos.');
+        setLoading(false);
+        return;
+      }
+
       // Se falhar, tenta login como profissional
       res = await fetch('http://localhost:3000/professional-login', {
         method: 'POST',
@@ -113,7 +120,7 @@ export function App() {
                   </div>
 
                   {error && (
-                    <div className="bg-red-950/50 border border-red-800 text-red-200 p-3 rounded-xl mb-4 text-xs text-center">
+                    <div className="bg-red-950/50 border border-red-800 text-red-200 p-3 rounded-xl mb-4 text-xs text-center font-medium">
                       {error}
                     </div>
                   )}

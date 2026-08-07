@@ -17,6 +17,40 @@ app.get('/', (req: Request, res: Response) => {
   res.send('Servidor do Agende+ rodando com sucesso! 🚀');
 });
 
+// --- ADMIN GLOBAL: ATUALIZAR E-MAIL DE QUALQUER USUÁRIO ---
+app.put('/admin/update-user-email/:userId', async (req: Request, res: Response) => {
+  try {
+    const { userId } = req.params;
+    const { newEmail } = req.body;
+
+    const updatedUser = await prisma.user.update({
+      where: { id: userId },
+      data: { email: newEmail },
+    });
+
+    return res.status(200).json({ message: 'E-mail atualizado com sucesso!', user: updatedUser });
+  } catch (error) {
+    return res.status(400).json({ error: 'Erro ao atualizar e-mail do usuário.' });
+  }
+});
+
+// --- ADMIN GLOBAL: BLOQUEAR/DESBLOQUEAR EMPRESA ---
+app.put('/admin/toggle-tenant-status/:tenantId', async (req: Request, res: Response) => {
+  try {
+    const { tenantId } = req.params;
+    const { isActive } = req.body;
+
+    const updatedTenant = await prisma.tenant.update({
+      where: { id: tenantId },
+      data: { isActive: Boolean(isActive) },
+    });
+
+    return res.status(200).json({ message: 'Status da empresa alterado com sucesso!', tenant: updatedTenant });
+  } catch (error) {
+    return res.status(400).json({ error: 'Erro ao alterar status da empresa.' });
+  }
+});
+
 // --- TENANTS ---
 app.post('/tenant', async (req: Request, res: Response) => {
   try {
@@ -39,7 +73,8 @@ app.post('/tenant', async (req: Request, res: Response) => {
         pixKey: pixKey || null,
         minNoticeHours: minNoticeHours !== undefined ? Number(minNoticeHours) : 2,
         requireDeposit: requireDeposit !== undefined ? Boolean(requireDeposit) : false,
-        depositPercent: depositPercent !== undefined ? Number(depositPercent) : 50
+        depositPercent: depositPercent !== undefined ? Number(depositPercent) : 50,
+        isActive: true
       },
     });
 
@@ -67,7 +102,10 @@ app.post('/tenant', async (req: Request, res: Response) => {
 
 app.get('/tenants', async (req: Request, res: Response) => {
   try {
-    const tenants = await prisma.tenant.findMany({ orderBy: { name: 'asc' } });
+    const tenants = await prisma.tenant.findMany({ 
+      include: { users: true }, 
+      orderBy: { name: 'asc' } 
+    });
     return res.status(200).json(tenants);
   } catch (error) {
     return res.status(500).json({ error: 'Erro ao buscar empresas.' });
@@ -236,6 +274,12 @@ app.post('/login', async (req: Request, res: Response) => {
       include: { tenant: true },
     });
     if (!user) return res.status(401).json({ error: 'E-mail ou senha inválidos.' });
+
+    // --- VERIFICAÇÃO SE A CONTA ESTÁ BLOQUEADA ---
+    if (user.tenant && !user.tenant.isActive) {
+      return res.status(403).json({ error: 'Conta bloqueada, contatar suporte' });
+    }
+
     const passwordMatch = await bcrypt.compare(password, user.password);
     if (!passwordMatch) return res.status(401).json({ error: 'E-mail ou senha inválidos.' });
     
@@ -266,6 +310,11 @@ app.post('/professional-login', async (req: Request, res: Response) => {
     if (!professional || !professional.password) {
       return res.status(401).json({ error: 'E-mail ou senha inválidos.' });
     }
+
+    if (professional.tenant && !professional.tenant.isActive) {
+      return res.status(403).json({ error: 'Conta bloqueada, contatar suporte' });
+    }
+
     const passwordMatch = await bcrypt.compare(password, professional.password);
     if (!passwordMatch) {
       return res.status(401).json({ error: 'E-mail ou senha inválidos.' });
@@ -552,12 +601,12 @@ app.delete('/appointment/:id', async (req: Request, res: Response) => {
   }
 });
 
-// --- ROBÔ CRON: DISPARO DO RESUMO DIÁRIO ÀS 20H (Puxa o e-mail do Admin automaticamente) ---
+// --- ROBÔ CRON: DISPARO DO RESUMO DIÁRIO ÀS 20H ---
 cron.schedule('0 20 * * *', async () => {
   console.log('🤖 Executando rotina de disparo dos resumos diários (20h)...');
   try {
     const tenants = await prisma.tenant.findMany({
-      include: { users: true } // Puxa os usuários vinculados para pegar o e-mail do admin
+      include: { users: true }
     });
 
     const tomorrow = new Date();
@@ -566,7 +615,6 @@ cron.schedule('0 20 * * *', async () => {
     const startOfTomorrow = new Date(new Date(tomorrow).setHours(0, 0, 0, 0));
     const endOfTomorrow = new Date(new Date(tomorrow).setHours(23, 59, 59, 999));
 
-    // Configuração do Nodemailer (substitua pelas suas credenciais SMTP quando for ativar o envio real)
     const transporter = nodemailer.createTransport({
       host: 'smtp.seudominio.com',
       port: 587,
@@ -574,17 +622,13 @@ cron.schedule('0 20 * * *', async () => {
     });
 
     for (const tenant of tenants) {
-      // Pega o e-mail do primeiro usuário cadastrado (administrador) do tenant
       const adminEmail = tenant.users && tenant.users.length > 0 ? tenant.users[0].email : null;
-      if (!adminEmail) continue; // Pula se o tenant não tiver usuário com e-mail
+      if (!adminEmail) continue;
 
       const appointments = await prisma.appointment.findMany({
         where: {
           tenantId: tenant.id,
-          date: {
-            gte: startOfTomorrow,
-            lte: endOfTomorrow,
-          }
+          date: { gte: startOfTomorrow, lte: endOfTomorrow }
         },
         include: { customer: true, service: true, professional: true }
       });
@@ -598,17 +642,7 @@ cron.schedule('0 20 * * *', async () => {
       });
       htmlContent += `</ul>`;
 
-      /* 
-      Descomente quando configurar seu SMTP real:
-      await transporter.sendMail({
-        from: '"Agende+" <no-reply@agendeplus.com>',
-        to: adminEmail,
-        subject: `Resumo da Agenda de Amanhã - ${tenant.name}`,
-        html: htmlContent
-      });
-      */
-
-      console.log(`[RESUMO 20H] E-mail enviado para o Admin (${adminEmail}) do tenant ${tenant.name} com ${appointments.length} agendamentos.`);
+      console.log(`[RESUMO 20H] Resumo gerado para ${tenant.name} (${adminEmail}) com ${appointments.length} agendamentos.`);
     }
   } catch (error) {
     console.error('Erro no cron das 20h:', error);

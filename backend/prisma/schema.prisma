@@ -18,11 +18,11 @@ model Tenant {
   themeColor      String          @default("emerald")
   logoUrl         String?
   pixKey          String?         
+  isActive        Boolean         @default(true) // <--- CAMPO DE CONTROLE DE BLOQUEIO ADICIONADO
   
-  // --- NOVOS CAMPOS ADICIONADOS ---
-  minNoticeHours  Int             @default(2)     // Antecedência mínima em horas
-  requireDeposit  Boolean         @default(false) // Se exige sinal ou não
-  depositPercent  Int             @default(50)    // Porcentagem do sinal (ex: 50%)
+  minNoticeHours  Int             @default(2)     
+  requireDeposit  Boolean         @default(false) 
+  depositPercent  Int             @default(50)    
 
   users           User[]
   services        Service[]
@@ -59,7 +59,7 @@ model Product {
   price       Float
   stock       Int      @default(0)
   tenantId    String
-  tenant      Tenant   @relation(fields: [tenantId], references: [id])
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
 }
 
 model Professional {
