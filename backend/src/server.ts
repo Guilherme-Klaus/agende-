@@ -43,7 +43,6 @@ app.post('/tenant', async (req: Request, res: Response) => {
       },
     });
 
-    // Pega o horário de fechamento informado no form ou assume 19:00
     const finalCloseTime = closingHour || '19:00';
 
     const defaultHours = [
@@ -553,18 +552,32 @@ app.delete('/appointment/:id', async (req: Request, res: Response) => {
   }
 });
 
-// --- ROBÔ CRON: DISPARO DO RESUMO DIÁRIO ÀS 20H ---
+// --- ROBÔ CRON: DISPARO DO RESUMO DIÁRIO ÀS 20H (Puxa o e-mail do Admin automaticamente) ---
 cron.schedule('0 20 * * *', async () => {
   console.log('🤖 Executando rotina de disparo dos resumos diários (20h)...');
   try {
-    const tenants = await prisma.tenant.findMany();
+    const tenants = await prisma.tenant.findMany({
+      include: { users: true } // Puxa os usuários vinculados para pegar o e-mail do admin
+    });
+
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
     
     const startOfTomorrow = new Date(new Date(tomorrow).setHours(0, 0, 0, 0));
     const endOfTomorrow = new Date(new Date(tomorrow).setHours(23, 59, 59, 999));
 
+    // Configuração do Nodemailer (substitua pelas suas credenciais SMTP quando for ativar o envio real)
+    const transporter = nodemailer.createTransport({
+      host: 'smtp.seudominio.com',
+      port: 587,
+      auth: { user: 'seu_usuario', pass: 'sua_senha' }
+    });
+
     for (const tenant of tenants) {
+      // Pega o e-mail do primeiro usuário cadastrado (administrador) do tenant
+      const adminEmail = tenant.users && tenant.users.length > 0 ? tenant.users[0].email : null;
+      if (!adminEmail) continue; // Pula se o tenant não tiver usuário com e-mail
+
       const appointments = await prisma.appointment.findMany({
         where: {
           tenantId: tenant.id,
@@ -578,7 +591,24 @@ cron.schedule('0 20 * * *', async () => {
 
       if (appointments.length === 0) continue;
 
-      console.log(`[RESUMO 20H] Tenant: ${tenant.name} (${tenant.whatsapp || 'Sem Contato'}) - ${appointments.length} agendamentos para amanhã.`);
+      let htmlContent = `<h2>Resumo da Agenda para Amanhã - ${tenant.name}</h2><ul>`;
+      appointments.forEach(app => {
+        const timeStr = new Date(app.date).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+        htmlContent += `<li>⏰ <strong>${timeStr}</strong> - Cliente: ${app.customer?.name} (${app.customer?.phone}) - Serviço: ${app.service?.name}</li>`;
+      });
+      htmlContent += `</ul>`;
+
+      /* 
+      Descomente quando configurar seu SMTP real:
+      await transporter.sendMail({
+        from: '"Agende+" <no-reply@agendeplus.com>',
+        to: adminEmail,
+        subject: `Resumo da Agenda de Amanhã - ${tenant.name}`,
+        html: htmlContent
+      });
+      */
+
+      console.log(`[RESUMO 20H] E-mail enviado para o Admin (${adminEmail}) do tenant ${tenant.name} com ${appointments.length} agendamentos.`);
     }
   } catch (error) {
     console.error('Erro no cron das 20h:', error);
