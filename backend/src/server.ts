@@ -3,6 +3,8 @@ import cors from 'cors';
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
+import cron from 'node-cron';
+import nodemailer from 'nodemailer';
 
 const app = express();
 const prisma = new PrismaClient();
@@ -18,7 +20,7 @@ app.get('/', (req: Request, res: Response) => {
 // --- TENANTS ---
 app.post('/tenant', async (req: Request, res: Response) => {
   try {
-    const { name, category, whatsapp, address, closingHour, themeColor, logoUrl, slug, pixKey } = req.body;
+    const { name, category, whatsapp, address, closingHour, themeColor, logoUrl, slug, pixKey, minNoticeHours, requireDeposit, depositPercent } = req.body;
     
     const generatedSlug = slug 
       ? slug.toLowerCase().replace(/[^a-z0-9]/g, '-') 
@@ -31,20 +33,26 @@ app.post('/tenant', async (req: Request, res: Response) => {
         category: category || null, 
         whatsapp: whatsapp || null, 
         address: address || null, 
-        closingHour: closingHour || null,
+        closingHour: closingHour || '19:00', 
         themeColor: themeColor || 'emerald',
         logoUrl: logoUrl || null,
-        pixKey: pixKey || null
+        pixKey: pixKey || null,
+        minNoticeHours: minNoticeHours !== undefined ? Number(minNoticeHours) : 2,
+        requireDeposit: requireDeposit !== undefined ? Boolean(requireDeposit) : false,
+        depositPercent: depositPercent !== undefined ? Number(depositPercent) : 50
       },
     });
 
+    // Pega o horário de fechamento informado no form ou assume 19:00
+    const finalCloseTime = closingHour || '19:00';
+
     const defaultHours = [
-      { dayOfWeek: 0, isOpen: false, openTime: '09:00', closeTime: '19:00', lunchStart: '12:00', lunchEnd: '13:00' },
-      { dayOfWeek: 1, isOpen: true, openTime: '09:00', closeTime: '19:00', lunchStart: '12:00', lunchEnd: '13:00' },
-      { dayOfWeek: 2, isOpen: true, openTime: '09:00', closeTime: '19:00', lunchStart: '12:00', lunchEnd: '13:00' },
-      { dayOfWeek: 3, isOpen: true, openTime: '09:00', closeTime: '19:00', lunchStart: '12:00', lunchEnd: '13:00' },
-      { dayOfWeek: 4, isOpen: true, openTime: '09:00', closeTime: '19:00', lunchStart: '12:00', lunchEnd: '13:00' },
-      { dayOfWeek: 5, isOpen: true, openTime: '09:00', closeTime: '19:30', lunchStart: '12:00', lunchEnd: '13:00' },
+      { dayOfWeek: 0, isOpen: false, openTime: '09:00', closeTime: finalCloseTime, lunchStart: '12:00', lunchEnd: '13:00' },
+      { dayOfWeek: 1, isOpen: true, openTime: '09:00', closeTime: finalCloseTime, lunchStart: '12:00', lunchEnd: '13:00' },
+      { dayOfWeek: 2, isOpen: true, openTime: '09:00', closeTime: finalCloseTime, lunchStart: '12:00', lunchEnd: '13:00' },
+      { dayOfWeek: 3, isOpen: true, openTime: '09:00', closeTime: finalCloseTime, lunchStart: '12:00', lunchEnd: '13:00' },
+      { dayOfWeek: 4, isOpen: true, openTime: '09:00', closeTime: finalCloseTime, lunchStart: '12:00', lunchEnd: '13:00' },
+      { dayOfWeek: 5, isOpen: true, openTime: '09:00', closeTime: finalCloseTime, lunchStart: '12:00', lunchEnd: '13:00' },
       { dayOfWeek: 6, isOpen: true, openTime: '09:00', closeTime: '17:00', lunchStart: '12:00', lunchEnd: '13:00' },
     ];
 
@@ -84,7 +92,7 @@ app.get('/tenant/:identifier', async (req: Request, res: Response) => {
 app.put('/tenant/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { name, category, whatsapp, address, themeColor, logoUrl, slug, pixKey } = req.body;
+    const { name, category, whatsapp, address, themeColor, logoUrl, slug, pixKey, minNoticeHours, requireDeposit, depositPercent, closingHour } = req.body;
     
     const existing = await prisma.tenant.findUnique({ where: { id } });
     if (!existing) return res.status(404).json({ error: 'Estabelecimento não encontrado.' });
@@ -96,10 +104,14 @@ app.put('/tenant/:id', async (req: Request, res: Response) => {
         slug: slug !== undefined ? slug.toLowerCase().replace(/[^a-z0-9]/g, '-') : existing.slug,
         category: category !== undefined ? category : existing.category, 
         whatsapp: whatsapp !== undefined ? whatsapp : existing.whatsapp, 
-        address: address !== undefined ? address : existing.address, 
+        address: address !== undefined ? address : existing.address,
+        closingHour: closingHour !== undefined ? closingHour : existing.closingHour,
         themeColor: themeColor !== undefined ? themeColor : existing.themeColor,
         logoUrl: logoUrl !== undefined ? logoUrl : existing.logoUrl,
-        pixKey: pixKey !== undefined ? pixKey : existing.pixKey
+        pixKey: pixKey !== undefined ? pixKey : existing.pixKey,
+        minNoticeHours: minNoticeHours !== undefined ? Number(minNoticeHours) : existing.minNoticeHours,
+        requireDeposit: requireDeposit !== undefined ? Boolean(requireDeposit) : existing.requireDeposit,
+        depositPercent: depositPercent !== undefined ? Number(depositPercent) : existing.depositPercent
       },
     });
     return res.status(200).json(updated);
@@ -266,7 +278,7 @@ app.post('/professional-login', async (req: Request, res: Response) => {
         email: professional.email,
         tenantId: professional.tenantId,
         tenantName: professional.tenant.name,
-        role: 'professional', // Papel restrito de profissional
+        role: 'professional',
       }
     });
   } catch (error) {
@@ -538,6 +550,38 @@ app.delete('/appointment/:id', async (req: Request, res: Response) => {
     return res.status(200).json({ message: 'Agendamento cancelado com sucesso!' });
   } catch (error) {
     return res.status(400).json({ error: 'Erro ao cancelar o agendamento.' });
+  }
+});
+
+// --- ROBÔ CRON: DISPARO DO RESUMO DIÁRIO ÀS 20H ---
+cron.schedule('0 20 * * *', async () => {
+  console.log('🤖 Executando rotina de disparo dos resumos diários (20h)...');
+  try {
+    const tenants = await prisma.tenant.findMany();
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    
+    const startOfTomorrow = new Date(new Date(tomorrow).setHours(0, 0, 0, 0));
+    const endOfTomorrow = new Date(new Date(tomorrow).setHours(23, 59, 59, 999));
+
+    for (const tenant of tenants) {
+      const appointments = await prisma.appointment.findMany({
+        where: {
+          tenantId: tenant.id,
+          date: {
+            gte: startOfTomorrow,
+            lte: endOfTomorrow,
+          }
+        },
+        include: { customer: true, service: true, professional: true }
+      });
+
+      if (appointments.length === 0) continue;
+
+      console.log(`[RESUMO 20H] Tenant: ${tenant.name} (${tenant.whatsapp || 'Sem Contato'}) - ${appointments.length} agendamentos para amanhã.`);
+    }
+  } catch (error) {
+    console.error('Erro no cron das 20h:', error);
   }
 });
 

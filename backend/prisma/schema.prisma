@@ -8,23 +8,29 @@ generator client {
 }
 
 model Tenant {
-  id            String          @id @default(uuid())
-  name          String
-  slug          String?         @unique
-  category      String?
-  whatsapp      String?
-  address       String?
-  closingHour   String?
-  themeColor    String          @default("emerald")
-  logoUrl       String?
-  pixKey        String?         // Chave PIX cadastrada para pagamento na confirmação
-  users         User[]
-  services      Service[]
-  products      Product[]       // Módulo de Produtos / Balcão
-  professionals Professional[]
-  customers     Customer[]
-  appointments  Appointment[]
-  businessHours BusinessHour[]
+  id              String          @id @default(uuid())
+  name            String
+  slug            String?         @unique
+  category        String?
+  whatsapp        String?
+  address         String?
+  closingHour     String?
+  themeColor      String          @default("emerald")
+  logoUrl         String?
+  pixKey          String?         
+  
+  // --- NOVOS CAMPOS ADICIONADOS ---
+  minNoticeHours  Int             @default(2)     // Antecedência mínima em horas
+  requireDeposit  Boolean         @default(false) // Se exige sinal ou não
+  depositPercent  Int             @default(50)    // Porcentagem do sinal (ex: 50%)
+
+  users           User[]
+  services        Service[]
+  products        Product[]       
+  professionals   Professional[]
+  customers       Customer[]
+  appointments    Appointment[]
+  businessHours   BusinessHour[]
 }
 
 model User {

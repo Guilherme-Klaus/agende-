@@ -11,6 +11,9 @@ interface Tenant {
   themeColor: string;
   logoUrl: string;
   pixKey: string;
+  minNoticeHours: number;
+  requireDeposit: boolean;
+  depositPercent: number;
 }
 
 interface Service {
@@ -260,6 +263,7 @@ export function ClientBooking() {
     ? professionalHours.find(h => h.dayOfWeek === currentDayOfWeek)
     : businessHours.find(h => h.dayOfWeek === currentDayOfWeek);
 
+  // --- GERADOR DE HORÁRIOS COM FILTRO DE ANTECEDÊNCIA (Funcionalidade 1) ---
   function generateTimeSlots() {
     if (!activeConfig || !activeConfig.isOpen) return [];
 
@@ -279,13 +283,25 @@ export function ClientBooking() {
       lunchEndMin = leH * 60 + leM;
     }
 
+    const now = new Date();
+    const minNoticeMs = (tenant?.minNoticeHours || 0) * 60 * 60 * 1000;
+
     while (currentMinutes < endMinutes) {
       const h = Math.floor(currentMinutes / 60);
       const m = currentMinutes % 60;
       const timeStr = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 
       const inLunch = lunchStartMin !== -1 && currentMinutes >= lunchStartMin && currentMinutes < lunchEndMin;
-      if (!inLunch) slots.push(timeStr);
+      
+      if (!inLunch) {
+        const slotDate = new Date(`${selectedDate}T${timeStr}:00`);
+        const diffMs = slotDate.getTime() - now.getTime();
+
+        // Só adiciona se respeitar a antecedência mínima configurada pelo lojista
+        if (diffMs >= minNoticeMs) {
+          slots.push(timeStr);
+        }
+      }
 
       currentMinutes += 30;
     }
@@ -345,7 +361,7 @@ export function ClientBooking() {
           customerId: customerData.id,
           serviceId: selectedServiceIds[0],
           professionalId: assignedProfessionalId,
-          productIds: selectedProductIds, // <--- Envia os IDs dos produtos para descontar o estoque
+          productIds: selectedProductIds,
         }),
       });
 
@@ -377,6 +393,9 @@ export function ClientBooking() {
 
   const timeSlots = generateTimeSlots();
   const activeTheme = themes[tenant?.themeColor || 'emerald'] || themes.emerald;
+
+  // --- CÁLCULO DO SINAL PIX POR PORCENTAGEM (Funcionalidade 3) ---
+  const depositAmount = tenant.requireDeposit ? (totalPrice * tenant.depositPercent) / 100 : totalPrice;
 
   return (
     <div className="min-h-screen bg-[#0f172a] text-slate-100 pb-28">
@@ -514,7 +533,6 @@ export function ClientBooking() {
               )}
             </div>
 
-            {/* SEÇÃO DE SERVIÇOS */}
             <div className="space-y-4">
               <h2 className="text-lg font-bold text-white">1. Selecione os Serviços</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -541,7 +559,6 @@ export function ClientBooking() {
               </div>
             </div>
 
-            {/* SEÇÃO DE PRODUTOS / BALCÃO (OPCIONAL) */}
             {products.length > 0 && (
               <div className="space-y-4 pt-4 border-t border-slate-800">
                 <h2 className="text-lg font-bold text-white flex items-center gap-2">
@@ -613,6 +630,7 @@ export function ClientBooking() {
 
               <p className="text-xs text-slate-300 mt-4 font-mono font-bold bg-[#0f172a] p-3 rounded-xl border border-slate-800">
                 Resumo: ⏱️ Tempo total: {totalDuration} min | 💰 Valor Total: R$ {totalPrice.toFixed(2)}
+                {tenant.requireDeposit && ` | ⚠️ Sinal exigido (${tenant.depositPercent}%): R$ ${depositAmount.toFixed(2)}`}
               </p>
             </div>
 
@@ -669,7 +687,7 @@ export function ClientBooking() {
                   🔴 {selectedProfessional ? `${selectedProfessional.name} está de folga` : 'Estabelecimento fechado'} neste dia da semana.
                 </div>
               ) : timeSlots.length === 0 ? (
-                <div className="text-slate-500 text-xs">Nenhum horário disponível para esta data.</div>
+                <div className="text-slate-500 text-xs">Nenhum horário disponível que respeite a antecedência mínima de {tenant.minNoticeHours}h.</div>
               ) : (
                 <div className="grid grid-cols-4 md:grid-cols-8 gap-2">
                   {timeSlots.map((time) => {
@@ -699,7 +717,7 @@ export function ClientBooking() {
           </div>
         )}
 
-        {/* TELA DE SUCESSO COM PAGAMENTO VIA PIX */}
+        {/* TELA DE SUCESSO COM SINAL PIX PROPORCIONAL (Funcionalidade 3) */}
         {step === 'success' && (
           <div className="bg-[#1e293b] border border-slate-800 p-8 rounded-3xl text-center max-w-lg mx-auto space-y-6 shadow-2xl">
             <div className={`w-16 h-16 border rounded-full flex items-center justify-center mx-auto ${activeTheme.bgSoft} ${activeTheme.border} ${activeTheme.text}`}>
@@ -710,20 +728,25 @@ export function ClientBooking() {
               <p className="text-xs text-slate-400 mt-1">Seu horário e itens foram reservados com sucesso.</p>
             </div>
 
-            {/* CARD DE PAGAMENTO VIA PIX */}
             {tenant.pixKey ? (
               <div className="bg-[#0f172a] border border-emerald-500/30 p-5 rounded-2xl text-left space-y-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2 text-emerald-400">
                     <DollarSign className="w-5 h-5" />
-                    <span className="font-bold text-xs uppercase tracking-wider">Pagamento via PIX</span>
+                    <span className="font-bold text-xs uppercase tracking-wider">
+                      {tenant.requireDeposit ? `Sinal de ${tenant.depositPercent}% via PIX` : 'Pagamento via PIX'}
+                    </span>
                   </div>
                   <span className="text-sm font-mono font-bold text-emerald-400 bg-emerald-500/10 px-3 py-1 rounded-xl border border-emerald-500/20">
-                    R$ {totalPrice.toFixed(2)}
+                    R$ {depositAmount.toFixed(2)}
                   </span>
                 </div>
 
-                <p className="text-xs text-slate-300">Pague agora mesmo utilizando a chave PIX abaixo:</p>
+                <p className="text-xs text-slate-300">
+                  {tenant.requireDeposit 
+                    ? `O estabelecimento exige um sinal de ${tenant.depositPercent}% para confirmar a reserva. Pague utilizando a chave abaixo:` 
+                    : 'Pague o valor total utilizando a chave PIX abaixo:'}
+                </p>
 
                 <div className="flex items-center gap-2">
                   <input 
@@ -747,7 +770,7 @@ export function ClientBooking() {
               </div>
             ) : (
               <div className="bg-[#0f172a] border border-slate-800 p-4 rounded-2xl text-slate-400 text-xs">
-                Valor Total (Serviços + Produtos): <strong className="text-white font-mono">R$ {totalPrice.toFixed(2)}</strong>
+                Valor Total: <strong className="text-white font-mono">R$ {depositAmount.toFixed(2)}</strong>
               </div>
             )}
 

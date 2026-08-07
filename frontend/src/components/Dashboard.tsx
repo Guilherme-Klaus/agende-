@@ -77,9 +77,8 @@ const DAYS_OF_WEEK = [
 export function Dashboard({ user, onLogout }: DashboardProps) {
   const isProfessional = user?.role === 'professional';
 
-  // Se for profissional, o painel trava estritamente na aba de agendamentos
   const [activeTab, setActiveTab] = useState<
-    'appointments' | 'services' | 'products' | 'professionals' | 'hours' | 'profHours' | 'financial' | 'customers' | 'qrcode' | 'appearance' | 'settings'
+    'appointments' | 'services' | 'products' | 'professionals' | 'hours' | 'profHours' | 'financial' | 'customers' | 'qrcode' | 'appearance' | 'settings' | 'rules'
   >('appointments');
 
   const [appointments, setAppointments] = useState<Appointment[]>([]);
@@ -109,6 +108,12 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
   const [logoPreview, setLogoPreview] = useState('');
   const [tenantSlug, setTenantSlug] = useState('');
   const [tenantPixKey, setTenantPixKey] = useState('');
+  
+  // --- NOVOS ESTADOS DE REGRAS ---
+  const [minNoticeHours, setMinNoticeHours] = useState('2');
+  const [requireDeposit, setRequireDeposit] = useState(false);
+  const [depositPercent, setDepositPercent] = useState('50');
+
   const [copied, setCopied] = useState(false);
 
   const tenantId = user?.tenantId;
@@ -137,6 +142,9 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
         if (data.logoUrl) setLogoPreview(data.logoUrl);
         if (data.slug) setTenantSlug(data.slug);
         if (data.pixKey) setTenantPixKey(data.pixKey);
+        if (data.minNoticeHours !== undefined) setMinNoticeHours(String(data.minNoticeHours));
+        if (data.requireDeposit !== undefined) setRequireDeposit(data.requireDeposit);
+        if (data.depositPercent !== undefined) setDepositPercent(String(data.depositPercent));
       }
     } catch (err) { console.error(err); }
   }
@@ -367,6 +375,27 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
     }
   }
 
+  async function handleSaveRules() {
+    try {
+      const res = await fetch(`http://localhost:3000/tenant/${tenantId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          minNoticeHours: Number(minNoticeHours), 
+          requireDeposit, 
+          depositPercent: Number(depositPercent) 
+        }),
+      });
+      if (res.ok) {
+        alert('Regras de agendamento salvas com sucesso!');
+      } else {
+        alert('Erro ao salvar regras.');
+      }
+    } catch (err) {
+      alert('Erro de conexão.');
+    }
+  }
+
   function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (file) {
@@ -471,7 +500,7 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
         </button>
       </header>
 
-      {/* Navegação por Abas (Se for profissional, exibe apenas a agenda) */}
+      {/* Navegação por Abas */}
       <div className="border-b border-slate-800 bg-[#1e293b]/20 px-6 flex gap-4 overflow-x-auto">
         <button onClick={() => setActiveTab('appointments')} className={`py-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap ${activeTab === 'appointments' ? 'border-emerald-500 text-emerald-400' : 'border-transparent text-slate-400 hover:text-slate-200'}`}>
           <Calendar className="w-4 h-4" /> Agendamentos Ativos ({futureAppointments.length})
@@ -493,6 +522,9 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
             </button>
             <button onClick={() => setActiveTab('profHours')} className={`py-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap ${activeTab === 'profHours' ? 'border-emerald-500 text-emerald-400' : 'border-transparent text-slate-400 hover:text-slate-200'}`}>
               <Settings className="w-4 h-4" /> Horários por Profissional
+            </button>
+            <button onClick={() => setActiveTab('rules')} className={`py-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap ${activeTab === 'rules' ? 'border-emerald-500 text-emerald-400' : 'border-transparent text-slate-400 hover:text-slate-200'}`}>
+              <ShieldCheck className="w-4 h-4" /> Regras e Sinal PIX
             </button>
             <button onClick={() => setActiveTab('financial')} className={`py-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap ${activeTab === 'financial' ? 'border-emerald-500 text-emerald-400' : 'border-transparent text-slate-400 hover:text-slate-200'}`}>
               <DollarSign className="w-4 h-4" /> Faturamento
@@ -709,6 +741,64 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
           </div>
         )}
 
+        {/* ABA: REGRAS E SINAL PIX (Funcionalidade 1 e 3) */}
+        {activeTab === 'rules' && !isProfessional && (
+          <div className="space-y-6 max-w-xl">
+            <div>
+              <h2 className="text-lg font-bold">Regras de Antecedência e Sinal PIX</h2>
+              <p className="text-xs text-slate-400">Configure a antecedência mínima e a exigência de sinal financeiro para os agendamentos.</p>
+            </div>
+
+            <div className="bg-[#1e293b] border border-slate-800 p-6 rounded-2xl space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-2">Antecedência Mínima (em horas)</label>
+                <input 
+                  type="number" 
+                  value={minNoticeHours} 
+                  onChange={(e) => setMinNoticeHours(e.target.value)}
+                  className="w-full bg-[#0f172a] border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-white focus:border-emerald-500 focus:outline-none font-mono" 
+                />
+                <p className="text-[10px] text-slate-500 mt-1">Impossibilita clientes de marcarem horários em cima da hora.</p>
+              </div>
+
+              <div className="border-t border-slate-800 pt-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="text-xs font-semibold text-slate-300 block">Exigir Sinal via PIX para Confirmar?</span>
+                    <span className="text-[10px] text-slate-500">O cliente precisará pagar uma porcentagem do valor total para reservar.</span>
+                  </div>
+                  <input 
+                    type="checkbox" 
+                    checked={requireDeposit} 
+                    onChange={(e) => setRequireDeposit(e.target.checked)}
+                    className="w-4 h-4 accent-emerald-500 cursor-pointer"
+                  />
+                </div>
+
+                {requireDeposit && (
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 mb-2">Porcentagem do Sinal (%)</label>
+                    <input 
+                      type="number" 
+                      value={depositPercent} 
+                      onChange={(e) => setDepositPercent(e.target.value)}
+                      placeholder="Ex: 50" 
+                      className="w-full bg-[#0f172a] border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-white focus:border-emerald-500 focus:outline-none font-mono" 
+                    />
+                  </div>
+                )}
+              </div>
+
+              <button 
+                onClick={handleSaveRules}
+                className="w-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold py-3 rounded-xl text-xs transition-colors shadow-md shadow-emerald-500/10 mt-2"
+              >
+                Salvar Regras de Agendamento
+              </button>
+            </div>
+          </div>
+        )}
+
         {activeTab === 'hours' && !isProfessional && (
           <div className="space-y-4">
             <div>
@@ -897,10 +987,8 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
           </div>
         )}
 
-        {/* ABA: APARÊNCIA, LINK PERSONALIZADO E LOGO */}
         {activeTab === 'appearance' && !isProfessional && (
           <div className="space-y-8 max-w-xl">
-            {/* Link Personalizado (Slug) */}
             <div className="space-y-4">
               <div>
                 <h2 className="text-lg font-bold">Link Personalizado (Slug)</h2>
@@ -927,7 +1015,6 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
               </div>
             </div>
 
-            {/* Foto de Perfil / Logo */}
             <div className="space-y-4">
               <div>
                 <h2 className="text-lg font-bold">Foto de Perfil / Logo do Estabelecimento</h2>
@@ -955,7 +1042,6 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
               </div>
             </div>
 
-            {/* Temas */}
             <div className="space-y-4">
               <div>
                 <h2 className="text-lg font-bold">Personalização do Tema Visual</h2>
@@ -999,7 +1085,6 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
           </div>
         )}
 
-        {/* ABA: CONFIGURAÇÃO DE CHAVE PIX */}
         {activeTab === 'settings' && !isProfessional && (
           <div className="space-y-6 max-w-xl">
             <div>
