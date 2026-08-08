@@ -74,7 +74,7 @@ app.post('/tenant', async (req: Request, res: Response) => {
         minNoticeHours: minNoticeHours !== undefined ? Number(minNoticeHours) : 2,
         requireDeposit: requireDeposit !== undefined ? Boolean(requireDeposit) : false,
         depositPercent: depositPercent !== undefined ? Number(depositPercent) : 50,
-        isActive: true
+        isActive: false // <--- CONTA NASCE BLOQUEADA ATÉ VOCÊ APROVAR O PAGAMENTO
       },
     });
 
@@ -275,7 +275,6 @@ app.post('/login', async (req: Request, res: Response) => {
     });
     if (!user) return res.status(401).json({ error: 'E-mail ou senha inválidos.' });
 
-    // --- VERIFICAÇÃO SE A CONTA ESTÁ BLOQUEADA ---
     if (user.tenant && !user.tenant.isActive) {
       return res.status(403).json({ error: 'Conta bloqueada, contatar suporte' });
     }
@@ -635,7 +634,7 @@ cron.schedule('0 20 * * *', async () => {
 
       if (appointments.length === 0) continue;
 
-      let htmlContent = `<h2>Resumo da Agenda para Amanhã - ${tenant.name}</h2><ul>`;
+      let htmlContent = `<h2>Resumo da Agenda para Amanhân - ${tenant.name}</h2><ul>`;
       appointments.forEach(app => {
         const timeStr = new Date(app.date).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
         htmlContent += `<li>⏰ <strong>${timeStr}</strong> - Cliente: ${app.customer?.name} (${app.customer?.phone}) - Serviço: ${app.service?.name}</li>`;
