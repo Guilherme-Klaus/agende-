@@ -91,7 +91,7 @@ app.post('/tenant', async (req: Request, res: Response) => {
         minNoticeHours: minNoticeHours !== undefined ? Number(minNoticeHours) : 2,
         requireDeposit: requireDeposit !== undefined ? Boolean(requireDeposit) : false,
         depositPercent: depositPercent !== undefined ? Number(depositPercent) : 50,
-        isActive: false // Nasce bloqueada aguardando pagamento
+        isActive: false 
       },
     });
 
@@ -455,7 +455,7 @@ app.delete('/professional/:id', async (req: Request, res: Response) => {
 // --- CUSTOMERS & CRM & APPOINTMENTS ---
 app.post('/customer', async (req: Request, res: Response) => {
   try {
-    const { name, phone, tenantId } = req.body;
+    const { name, phone, birthDate, tenantId } = req.body;
     const cleanPhone = String(phone).replace(/\D/g, '');
     
     let customer = await prisma.customer.findFirst({ 
@@ -463,11 +463,17 @@ app.post('/customer', async (req: Request, res: Response) => {
     });
 
     if (!customer) {
-      customer = await prisma.customer.create({ data: { name, phone: cleanPhone, tenantId } });
+      customer = await prisma.customer.create({ 
+        data: { name, phone: cleanPhone, birthDate: birthDate || null, tenantId } 
+      });
     } else {
       customer = await prisma.customer.update({
         where: { id: customer.id },
-        data: { name, phone: cleanPhone }
+        data: { 
+          name, 
+          phone: cleanPhone, 
+          birthDate: birthDate !== undefined ? (birthDate || null) : customer.birthDate 
+        }
       });
     }
 
@@ -525,6 +531,7 @@ app.get('/customers-report/:tenantId', async (req: Request, res: Response) => {
         id: c.id,
         name: c.name,
         phone: c.phone,
+        birthDate: c.birthDate,
         totalAppointments,
         totalSpent,
         lastAppointment: c.appointments.length > 0 ? c.appointments[c.appointments.length - 1].date : null

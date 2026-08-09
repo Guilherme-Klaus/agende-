@@ -87,6 +87,7 @@ export function ClientBooking() {
 
   const [clientName, setClientName] = useState('');
   const [clientPhone, setClientPhone] = useState('');
+  const [clientBirthDate, setClientBirthDate] = useState(''); // <--- NOVO ESTADO DA DATA DE NASCIMENTO
   const [loading, setLoading] = useState(false);
   const [pixCopied, setPixCopied] = useState(false);
 
@@ -263,7 +264,6 @@ export function ClientBooking() {
     ? professionalHours.find(h => h.dayOfWeek === currentDayOfWeek)
     : businessHours.find(h => h.dayOfWeek === currentDayOfWeek);
 
-  // --- GERADOR DE HORÁRIOS COM FILTRO DE ANTECEDÊNCIA (Funcionalidade 1) ---
   function generateTimeSlots() {
     if (!activeConfig || !activeConfig.isOpen) return [];
 
@@ -297,7 +297,6 @@ export function ClientBooking() {
         const slotDate = new Date(`${selectedDate}T${timeStr}:00`);
         const diffMs = slotDate.getTime() - now.getTime();
 
-        // Só adiciona se respeitar a antecedência mínima configurada pelo lojista
         if (diffMs >= minNoticeMs) {
           slots.push(timeStr);
         }
@@ -322,7 +321,12 @@ export function ClientBooking() {
       const customerRes = await fetch('http://localhost:3000/customer', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: clientName, phone: clientPhone, tenantId: tenant.id }),
+        body: JSON.stringify({ 
+          name: clientName, 
+          phone: clientPhone, 
+          birthDate: clientBirthDate || null, // <--- ENVIANDO A DATA DE NASCIMENTO
+          tenantId: tenant.id 
+        }),
       });
       const customerData = await customerRes.json();
 
@@ -394,7 +398,6 @@ export function ClientBooking() {
   const timeSlots = generateTimeSlots();
   const activeTheme = themes[tenant?.themeColor || 'emerald'] || themes.emerald;
 
-  // --- CÁLCULO DO SINAL PIX POR PORCENTAGEM (Funcionalidade 3) ---
   const depositAmount = tenant.requireDeposit ? (totalPrice * tenant.depositPercent) / 100 : totalPrice;
 
   return (
@@ -707,9 +710,15 @@ export function ClientBooking() {
             {activeConfig?.isOpen && (
               <form onSubmit={handleConfirmBooking} className="space-y-4 pt-4 border-t border-slate-800">
                 <h3 className="text-sm font-semibold text-slate-300">Seus Dados</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                   <input type="text" required value={clientName} onChange={(e) => setClientName(e.target.value)} placeholder="Seu Nome Completo" className={`w-full bg-[#0f172a] border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none ${activeTheme.ring}`} />
                   <input type="text" required value={clientPhone} onChange={(e) => setClientPhone(e.target.value)} placeholder="Seu WhatsApp" className={`w-full bg-[#0f172a] border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none ${activeTheme.ring}`} />
+                  
+                  {/* NOVO CAMPO DE DATA DE NASCIMENTO */}
+                  <div>
+                    <label className="block text-[10px] text-slate-400 mb-1">Data de Nascimento (Opcional)</label>
+                    <input type="date" value={clientBirthDate} onChange={(e) => setClientBirthDate(e.target.value)} className={`w-full bg-[#0f172a] border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none ${activeTheme.ring}`} />
+                  </div>
                 </div>
                 <button type="submit" disabled={loading || !selectedTime} className={`w-full font-bold py-3.5 rounded-xl text-xs disabled:opacity-50 shadow-lg transition-all ${activeTheme.primary} ${activeTheme.shadow}`}>Confirmar Agendamento</button>
               </form>
@@ -717,7 +726,6 @@ export function ClientBooking() {
           </div>
         )}
 
-        {/* TELA DE SUCESSO COM SINAL PIX PROPORCIONAL (Funcionalidade 3) */}
         {step === 'success' && (
           <div className="bg-[#1e293b] border border-slate-800 p-8 rounded-3xl text-center max-w-lg mx-auto space-y-6 shadow-2xl">
             <div className={`w-16 h-16 border rounded-full flex items-center justify-center mx-auto ${activeTheme.bgSoft} ${activeTheme.border} ${activeTheme.text}`}>
@@ -774,7 +782,7 @@ export function ClientBooking() {
               </div>
             )}
 
-            <button onClick={() => { setStep('services'); setMode('home'); setSelectedServiceIds([]); setSelectedProductIds([]); setSelectedTime(''); }} className="w-full bg-slate-800 hover:bg-slate-700 text-slate-200 py-3 rounded-xl text-xs font-medium transition-colors">
+            <button onClick={() => { setStep('services'); setMode('home'); setSelectedServiceIds([]); setSelectedProductIds([]); setSelectedTime(''); setClientBirthDate(''); }} className="w-full bg-slate-800 hover:bg-slate-700 text-slate-200 py-3 rounded-xl text-xs font-medium transition-colors">
               Voltar ao Início
             </button>
           </div>

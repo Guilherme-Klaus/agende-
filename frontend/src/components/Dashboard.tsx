@@ -54,6 +54,7 @@ interface CustomerReport {
   id: string;
   name: string;
   phone: string;
+  birthDate?: string | null;
   totalAppointments: number;
   totalSpent: number;
   lastAppointment: string | null;
@@ -109,7 +110,6 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
   const [tenantSlug, setTenantSlug] = useState('');
   const [tenantPixKey, setTenantPixKey] = useState('');
   
-  // --- NOVOS ESTADOS DE REGRAS ---
   const [minNoticeHours, setMinNoticeHours] = useState('2');
   const [requireDeposit, setRequireDeposit] = useState(false);
   const [depositPercent, setDepositPercent] = useState('50');
@@ -741,7 +741,6 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
           </div>
         )}
 
-        {/* ABA: REGRAS E SINAL PIX (Funcionalidade 1 e 3) */}
         {activeTab === 'rules' && !isProfessional && (
           <div className="space-y-6 max-w-xl">
             <div>
@@ -910,6 +909,7 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
           </div>
         )}
 
+        {/* ABA CLIENTES (CRM) COM O DESTAQUE DE ANIVERSARIANTE DO DIA */}
         {activeTab === 'customers' && !isProfessional && (
           <div className="space-y-4">
             <h2 className="text-lg font-bold">Base de Clientes (CRM)</h2>
@@ -922,19 +922,50 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
                     <tr className="border-b border-slate-800 bg-slate-900/50 text-slate-400 uppercase tracking-wider">
                       <th className="p-4">Cliente</th>
                       <th className="p-4">WhatsApp</th>
+                      <th className="p-4">Nascimento</th>
                       <th className="p-4">Atendimentos</th>
                       <th className="p-4">Total Gasto</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800">
-                    {customers.map((c) => (
-                      <tr key={c.id} className="hover:bg-slate-800/30 transition-colors">
-                        <td className="p-4 font-bold text-white">{c.name}</td>
-                        <td className="p-4 text-slate-300">{c.phone}</td>
-                        <td className="p-4 text-slate-300">{c.totalAppointments}</td>
-                        <td className="p-4 font-mono font-bold text-emerald-400">R$ {c.totalSpent.toFixed(2)}</td>
-                      </tr>
-                    ))}
+                    {customers.map((c) => {
+                      let formattedBirthDate = 'Não informada';
+                      let isBirthdayToday = false;
+
+                      if (c.birthDate) {
+                        const [year, month, day] = c.birthDate.split('-');
+                        if (year && month && day) {
+                          formattedBirthDate = `${day}/${month}/${year}`;
+
+                          const today = new Date();
+                          const currentDay = String(today.getDate()).padStart(2, '0');
+                          const currentMonth = String(today.getMonth() + 1).padStart(2, '0');
+
+                          if (day === currentDay && month === currentMonth) {
+                            isBirthdayToday = true;
+                          }
+                        } else {
+                          formattedBirthDate = c.birthDate;
+                        }
+                      }
+
+                      return (
+                        <tr key={c.id} className={`hover:bg-slate-800/30 transition-colors ${isBirthdayToday ? 'bg-amber-500/10' : ''}`}>
+                          <td className="p-4 font-bold text-white flex items-center gap-2">
+                            {c.name}
+                            {isBirthdayToday && (
+                              <span className="bg-amber-500 text-slate-950 text-[10px] font-extrabold px-2 py-0.5 rounded-full animate-pulse shadow-md">
+                                🎂 ANIVERSARIANTE HOJE!
+                              </span>
+                            )}
+                          </td>
+                          <td className="p-4 text-slate-300">{c.phone}</td>
+                          <td className="p-4 text-emerald-300 font-mono">{formattedBirthDate}</td>
+                          <td className="p-4 text-slate-300">{c.totalAppointments}</td>
+                          <td className="p-4 font-mono font-bold text-emerald-400">R$ {c.totalSpent.toFixed(2)}</td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
