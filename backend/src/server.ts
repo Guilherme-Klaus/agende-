@@ -17,58 +17,48 @@ app.get('/', (req: Request, res: Response) => {
   res.send('Servidor do Agende+ rodando com sucesso! 🚀');
 });
 
-// --- ADMIN GLOBAL: ATUALIZAR E-MAIL DE QUALQUER USUÁRIO ---
 app.put('/admin/update-user-email/:userId', async (req: Request, res: Response) => {
   try {
     const { userId } = req.params;
     const { newEmail } = req.body;
-
     const updatedUser = await prisma.user.update({
       where: { id: userId },
       data: { email: newEmail },
     });
-
     return res.status(200).json({ message: 'E-mail atualizado com sucesso!', user: updatedUser });
   } catch (error) {
     return res.status(400).json({ error: 'Erro ao atualizar e-mail do usuário.' });
   }
 });
 
-// --- ADMIN GLOBAL: BLOQUEAR/DESBLOQUEAR EMPRESA ---
 app.put('/admin/toggle-tenant-status/:tenantId', async (req: Request, res: Response) => {
   try {
     const { tenantId } = req.params;
     const { isActive } = req.body;
-
     const updatedTenant = await prisma.tenant.update({
       where: { id: tenantId },
       data: { isActive: Boolean(isActive) },
     });
-
     return res.status(200).json({ message: 'Status da empresa alterado com sucesso!', tenant: updatedTenant });
   } catch (error) {
     return res.status(400).json({ error: 'Erro ao alterar status da empresa.' });
   }
 });
 
-// --- ADMIN GLOBAL: ATUALIZAR DATA DE VENCIMENTO ---
 app.put('/admin/update-tenant-due-date/:tenantId', async (req: Request, res: Response) => {
   try {
     const { tenantId } = req.params;
     const { dueDate } = req.body;
-
     const updatedTenant = await prisma.tenant.update({
       where: { id: tenantId },
       data: { dueDate: dueDate ? new Date(dueDate) : null },
     });
-
     return res.status(200).json({ message: 'Data de vencimento atualizada com sucesso!', tenant: updatedTenant });
   } catch (error) {
     return res.status(400).json({ error: 'Erro ao atualizar data de vencimento.' });
   }
 });
 
-// --- TENANTS ---
 app.post('/tenant', async (req: Request, res: Response) => {
   try {
     const { name, category, whatsapp, address, closingHour, themeColor, logoUrl, slug, pixKey, minNoticeHours, requireDeposit, depositPercent } = req.body;
@@ -96,7 +86,6 @@ app.post('/tenant', async (req: Request, res: Response) => {
     });
 
     const finalCloseTime = closingHour || '19:00';
-
     const defaultHours = [
       { dayOfWeek: 0, isOpen: false, openTime: '09:00', closeTime: finalCloseTime, lunchStart: '12:00', lunchEnd: '13:00' },
       { dayOfWeek: 1, isOpen: true, openTime: '09:00', closeTime: finalCloseTime, lunchStart: '12:00', lunchEnd: '13:00' },
@@ -179,6 +168,7 @@ app.delete('/tenant/:id', async (req: Request, res: Response) => {
     const { id } = req.params;
     
     await prisma.appointment.deleteMany({ where: { tenantId: id } });
+    await prisma.expense.deleteMany({ where: { tenantId: id } });
 
     const profs = await prisma.professional.findMany({ where: { tenantId: id } });
     for (const p of profs) {
@@ -201,7 +191,6 @@ app.delete('/tenant/:id', async (req: Request, res: Response) => {
   }
 });
 
-// --- BUSINESS HOURS ---
 app.get('/business-hours/:tenantId', async (req: Request, res: Response) => {
   try {
     const { tenantId } = req.params;
@@ -226,7 +215,6 @@ app.put('/business-hour/:id', async (req: Request, res: Response) => {
   }
 });
 
-// --- PROFESSIONAL HOURS ---
 app.get('/professional-hours/:professionalId', async (req: Request, res: Response) => {
   try {
     const { professionalId } = req.params;
@@ -268,7 +256,6 @@ app.put('/professional-hour/:id', async (req: Request, res: Response) => {
   }
 });
 
-// --- AUTH & LOGIN ---
 app.post('/user', async (req: Request, res: Response) => {
   try {
     const { name, email, password, tenantId } = req.body;
@@ -344,7 +331,6 @@ app.post('/professional-login', async (req: Request, res: Response) => {
   }
 });
 
-// --- SERVICES ---
 app.post('/service', async (req: Request, res: Response) => {
   try {
     const { name, duration, price, tenantId } = req.body;
@@ -381,7 +367,6 @@ app.delete('/service/:id', async (req: Request, res: Response) => {
   }
 });
 
-// --- PRODUCTS ---
 app.post('/product', async (req: Request, res: Response) => {
   try {
     const { name, price, stock, tenantId } = req.body;
@@ -414,7 +399,66 @@ app.delete('/product/:id', async (req: Request, res: Response) => {
   }
 });
 
-// --- PROFESSIONALS ---
+// --- EXPENSES (DESPESAS) ---
+app.post('/expense', async (req: Request, res: Response) => {
+  try {
+    const { description, amount, tenantId } = req.body;
+    const expense = await prisma.expense.create({
+      data: { description, amount: Number(amount) || 0, tenantId }
+    });
+    return res.status(201).json(expense);
+  } catch (error) {
+    return res.status(400).json({ error: 'Erro ao cadastrar despesa.' });
+  }
+});
+
+app.get('/expenses/:tenantId', async (req: Request, res: Response) => {
+  try {
+    const { tenantId } = req.params;
+    const expenses = await prisma.expense.findMany({ where: { tenantId }, orderBy: { date: 'desc' } });
+    return res.status(200).json(expenses);
+  } catch (error) {
+    return res.status(500).json({ error: 'Erro ao buscar despesas.' });
+  }
+});
+
+app.delete('/expense/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    await prisma.expense.delete({ where: { id } });
+    return res.status(200).json({ message: 'Despesa excluída com sucesso.' });
+  } catch (error) {
+    return res.status(400).json({ error: 'Erro ao excluir despesa.' });
+  }
+});
+
+// --- REVIEWS (AVALIAÇÕES) ---
+app.post('/review', async (req: Request, res: Response) => {
+  try {
+    const { appointmentId, rating, comment } = req.body;
+    const review = await prisma.review.create({
+      data: { appointmentId, rating: Number(rating), comment: comment || null }
+    });
+    return res.status(201).json(review);
+  } catch (error) {
+    return res.status(400).json({ error: 'Erro ao salvar avaliação.' });
+  }
+});
+
+app.get('/reviews/:tenantId', async (req: Request, res: Response) => {
+  try {
+    const { tenantId } = req.params;
+    const reviews = await prisma.review.findMany({
+      where: { appointment: { tenantId } },
+      include: { appointment: { include: { customer: true, service: true, professional: true } } },
+      orderBy: { createdAt: 'desc' }
+    });
+    return res.status(200).json(reviews);
+  } catch (error) {
+    return res.status(500).json({ error: 'Erro ao buscar avaliações.' });
+  }
+});
+
 app.post('/professional', async (req: Request, res: Response) => {
   try {
     const { name, nickname, avatarUrl, email, password, tenantId } = req.body;
@@ -452,7 +496,6 @@ app.delete('/professional/:id', async (req: Request, res: Response) => {
   }
 });
 
-// --- CUSTOMERS & CRM & APPOINTMENTS ---
 app.post('/customer', async (req: Request, res: Response) => {
   try {
     const { name, phone, birthDate, tenantId } = req.body;
@@ -502,7 +545,7 @@ app.get('/customer-appointments/:tenantId', async (req: Request, res: Response) 
 
     const appointments = await prisma.appointment.findMany({
       where: { tenantId, customerId: { in: customerIds } },
-      include: { service: true, professional: true, customer: true },
+      include: { service: true, professional: true, customer: true, review: true },
       orderBy: { date: 'desc' },
     });
 
@@ -599,7 +642,7 @@ app.get('/appointments/:tenantId', async (req: Request, res: Response) => {
     const { tenantId } = req.params;
     const appointments = await prisma.appointment.findMany({
       where: { tenantId },
-      include: { customer: true, service: true, professional: true },
+      include: { customer: true, service: true, professional: true, review: true },
       orderBy: { date: 'asc' },
     });
     return res.status(200).json(appointments);
@@ -618,7 +661,6 @@ app.delete('/appointment/:id', async (req: Request, res: Response) => {
   }
 });
 
-// --- ROBÔ CRON: DISPARO DO RESUMO DIÁRIO ÀS 20H ---
 cron.schedule('0 20 * * *', async () => {
   console.log('🤖 Executando rotina de disparo dos resumos diários (20h)...');
   try {

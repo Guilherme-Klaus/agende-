@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { Store, MapPin, ArrowLeft, CheckCircle2, CheckCircle, ArrowRight, History, Calendar, Trash2, Copy, DollarSign, Package } from 'lucide-react';
+import { Store, MapPin, ArrowLeft, CheckCircle2, CheckCircle, ArrowRight, History, Calendar, Trash2, Copy, DollarSign, Package, Star } from 'lucide-react';
 
 interface Tenant {
   id: string;
@@ -52,6 +52,7 @@ interface AppointmentHistory {
   date: string;
   service?: { name: string; price: number };
   professional?: { name: string };
+  review?: { rating: number; comment?: string };
 }
 
 const themes: Record<string, { primary: string, border: string, bgSoft: string, text: string, shadow: string, ring: string }> = {
@@ -87,14 +88,17 @@ export function ClientBooking() {
 
   const [clientName, setClientName] = useState('');
   const [clientPhone, setClientPhone] = useState('');
-  const [clientBirthDate, setClientBirthDate] = useState(''); // <--- NOVO ESTADO DA DATA DE NASCIMENTO
+  const [clientBirthDate, setClientBirthDate] = useState('');
   const [loading, setLoading] = useState(false);
   const [pixCopied, setPixCopied] = useState(false);
 
+  const [showReviewModal, setShowReviewModal] = useState(false);
+  const [reviewAppointmentId, setReviewAppointmentId] = useState('');
+  const [rating, setRating] = useState(5);
+  const [comment, setComment] = useState('');
+
   useEffect(() => {
-    if (tenantId) {
-      fetchTenantInfo();
-    }
+    if (tenantId) fetchTenantInfo();
   }, [tenantId]);
 
   async function fetchTenantInfo() {
@@ -140,9 +144,7 @@ export function ClientBooking() {
   }
 
   useEffect(() => {
-    if (selectedProfessional) {
-      fetchProfessionalHours(selectedProfessional.id);
-    }
+    if (selectedProfessional) fetchProfessionalHours(selectedProfessional.id);
   }, [selectedProfessional]);
 
   async function fetchProfessionalHours(profId: string) {
@@ -153,9 +155,7 @@ export function ClientBooking() {
   }
 
   useEffect(() => {
-    if (tenant && selectedDate) {
-      fetchBookedAppointments(tenant.id);
-    }
+    if (tenant && selectedDate) fetchBookedAppointments(tenant.id);
   }, [tenant, selectedDate, selectedProfessional, professionals, professionalHours]);
 
   async function fetchBookedAppointments(realTenantId: string) {
@@ -163,11 +163,7 @@ export function ClientBooking() {
       const res = await fetch(`http://localhost:3000/appointments/${realTenantId}`);
       if (res.ok) {
         const data = await res.json();
-        
-        const appointmentsOnDate = data.filter((item: any) => {
-          const itemDate = new Date(item.date).toISOString().split('T')[0];
-          return itemDate === selectedDate;
-        });
+        const appointmentsOnDate = data.filter((item: any) => new Date(item.date).toISOString().split('T')[0] === selectedDate);
 
         if (selectedProfessional) {
           const times = appointmentsOnDate
@@ -179,7 +175,6 @@ export function ClientBooking() {
           setBookedTimes(times);
         } else {
           const totalProfessionals = professionals.length;
-          
           if (totalProfessionals === 0) {
             const times = appointmentsOnDate.map((item: any) => {
               const d = new Date(item.date);
@@ -193,10 +188,7 @@ export function ClientBooking() {
               const tStr = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
               timeCounts[tStr] = (timeCounts[tStr] || 0) + 1;
             });
-
-            const fullyBookedTimes = Object.keys(timeCounts).filter(
-              (time) => timeCounts[time] >= totalProfessionals
-            );
+            const fullyBookedTimes = Object.keys(timeCounts).filter((time) => timeCounts[time] >= totalProfessionals);
             setBookedTimes(fullyBookedTimes);
           }
         }
@@ -207,7 +199,6 @@ export function ClientBooking() {
   async function handleSearchHistory(e: React.FormEvent) {
     e.preventDefault();
     if (!tenant || !searchPhone) return;
-
     try {
       const res = await fetch(`http://localhost:3000/customer-appointments/${tenant.id}?phone=${encodeURIComponent(searchPhone)}`);
       if (res.ok) {
@@ -233,6 +224,25 @@ export function ClientBooking() {
     }
   }
 
+  async function handleSendReview(e: React.FormEvent) {
+    e.preventDefault();
+    try {
+      const res = await fetch('http://localhost:3000/review', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ appointmentId: reviewAppointmentId, rating, comment })
+      });
+      if (res.ok) {
+        alert('Obrigado pela sua avaliação!');
+        setShowReviewModal(false);
+      } else {
+        alert('Erro ao enviar avaliação.');
+      }
+    } catch (err) {
+      alert('Erro de conexão.');
+    }
+  }
+
   function handleToggleService(serviceId: string) {
     if (selectedServiceIds.includes(serviceId)) {
       setSelectedServiceIds(selectedServiceIds.filter(id => id !== serviceId));
@@ -251,28 +261,21 @@ export function ClientBooking() {
 
   const selectedServicesList = services.filter(s => selectedServiceIds.includes(s.id));
   const selectedProductsList = products.filter(p => selectedProductIds.includes(p.id));
-  
-  const servicesPrice = selectedServicesList.reduce((acc, s) => acc + s.price, 0);
-  const productsPrice = selectedProductsList.reduce((acc, p) => acc + p.price, 0);
-  const totalPrice = servicesPrice + productsPrice;
-
+  const totalPrice = selectedServicesList.reduce((acc, s) => acc + s.price, 0) + selectedProductsList.reduce((acc, p) => acc + p.price, 0);
   const totalDuration = selectedServicesList.reduce((acc, s) => acc + s.duration, 0);
 
   const currentDayOfWeek = new Date(selectedDate + 'T00:00:00').getDay();
-  
-  const activeConfig = selectedProfessional 
-    ? professionalHours.find(h => h.dayOfWeek === currentDayOfWeek)
-    : businessHours.find(h => h.dayOfWeek === currentDayOfWeek);
+  const activeConfig = selectedProfessional ? professionalHours.find(h => h.dayOfWeek === currentDayOfWeek) : businessHours.find(h => h.dayOfWeek === currentDayOfWeek);
 
   function generateTimeSlots() {
     if (!activeConfig || !activeConfig.isOpen) return [];
-
     const slots = [];
     const [openH, openM] = activeConfig.openTime.split(':').map(Number);
     const [closeH, closeM] = activeConfig.closeTime.split(':').map(Number);
-
     let currentMinutes = openH * 60 + openM;
     const endMinutes = closeH * 60 + closeM;
+    const now = new Date();
+    const minNoticeMs = (tenant?.minNoticeHours || 0) * 60 * 60 * 1000;
 
     let lunchStartMin = -1;
     let lunchEndMin = -1;
@@ -283,28 +286,20 @@ export function ClientBooking() {
       lunchEndMin = leH * 60 + leM;
     }
 
-    const now = new Date();
-    const minNoticeMs = (tenant?.minNoticeHours || 0) * 60 * 60 * 1000;
-
     while (currentMinutes < endMinutes) {
       const h = Math.floor(currentMinutes / 60);
       const m = currentMinutes % 60;
       const timeStr = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-
       const inLunch = lunchStartMin !== -1 && currentMinutes >= lunchStartMin && currentMinutes < lunchEndMin;
-      
+
       if (!inLunch) {
         const slotDate = new Date(`${selectedDate}T${timeStr}:00`);
-        const diffMs = slotDate.getTime() - now.getTime();
-
-        if (diffMs >= minNoticeMs) {
+        if (slotDate.getTime() - now.getTime() >= minNoticeMs) {
           slots.push(timeStr);
         }
       }
-
       currentMinutes += 30;
     }
-
     return slots;
   }
 
@@ -324,7 +319,7 @@ export function ClientBooking() {
         body: JSON.stringify({ 
           name: clientName, 
           phone: clientPhone, 
-          birthDate: clientBirthDate || null, // <--- ENVIANDO A DATA DE NASCIMENTO
+          birthDate: clientBirthDate || null, 
           tenantId: tenant.id 
         }),
       });
@@ -335,24 +330,16 @@ export function ClientBooking() {
       appointmentDate.setHours(parseInt(hours), parseInt(minutes), 0, 0);
 
       let assignedProfessionalId = selectedProfessional ? selectedProfessional.id : null;
-      
       if (!assignedProfessionalId && professionals.length > 0) {
         const resApp = await fetch(`http://localhost:3000/appointments/${tenant.id}`);
         if (resApp.ok) {
           const allApps = await resApp.json();
           const busyProfIds = allApps
-            .filter((item: any) => {
-              const itemDate = new Date(item.date).getTime();
-              return itemDate === appointmentDate.getTime() && item.professionalId;
-            })
+            .filter((item: any) => new Date(item.date).getTime() === appointmentDate.getTime() && item.professionalId)
             .map((item: any) => item.professionalId);
 
           const freeProf = professionals.find((p) => !busyProfIds.includes(p.id));
-          if (freeProf) {
-            assignedProfessionalId = freeProf.id;
-          } else {
-            assignedProfessionalId = professionals[0].id;
-          }
+          assignedProfessionalId = freeProf ? freeProf.id : professionals[0].id;
         }
       }
 
@@ -370,6 +357,11 @@ export function ClientBooking() {
       });
 
       if (appointmentRes.ok) {
+        const appointmentData = await appointmentRes.json();
+        if (appointmentData.isNewCustomer) {
+          setReviewAppointmentId(appointmentData.id);
+          setShowReviewModal(true);
+        }
         setStep('success');
       } else {
         const errData = await appointmentRes.json();
@@ -397,11 +389,34 @@ export function ClientBooking() {
 
   const timeSlots = generateTimeSlots();
   const activeTheme = themes[tenant?.themeColor || 'emerald'] || themes.emerald;
-
   const depositAmount = tenant.requireDeposit ? (totalPrice * tenant.depositPercent) / 100 : totalPrice;
 
   return (
-    <div className="min-h-screen bg-[#0f172a] text-slate-100 pb-28">
+    <div className="min-h-screen bg-[#0f172a] text-slate-100 pb-28 relative">
+      
+      {showReviewModal && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-[#1e293b] border border-slate-800 p-6 rounded-3xl w-full max-w-md shadow-2xl space-y-4">
+            <h3 className="text-lg font-bold text-white text-center">Como foi sua primeira experiência?</h3>
+            <p className="text-xs text-slate-400 text-center">Sua opinião é fundamental para nos ajudarmos a melhorar!</p>
+            <form onSubmit={handleSendReview} className="space-y-4">
+              <div className="flex justify-center gap-2">
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <button type="button" key={star} onClick={() => setRating(star)} className="p-1 focus:outline-none">
+                    <Star className={`w-8 h-8 ${star <= rating ? 'text-amber-400 fill-amber-400' : 'text-slate-600'}`} />
+                  </button>
+                ))}
+              </div>
+              <textarea value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Deixe um comentário opcional..." className="w-full bg-[#0f172a] border border-slate-800 rounded-xl px-3 py-2 text-xs text-white h-20 resize-none focus:outline-none" />
+              <div className="flex gap-2">
+                <button type="button" onClick={() => setShowReviewModal(false)} className="w-full bg-slate-800 text-slate-300 py-2.5 rounded-xl text-xs">Pular</button>
+                <button type="submit" className={`w-full font-bold py-2.5 rounded-xl text-xs ${activeTheme.primary}`}>Enviar Avaliação</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       <div className="bg-[#1e293b] border-b border-slate-800 px-6 py-8">
         <div className="max-w-5xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-4">

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Building2, Calendar, Briefcase, Users, LogOut, Trash2, 
-  Clock, CheckCircle, XCircle, MessageSquare, Settings, ShieldCheck, DollarSign, UserCheck, QrCode, Copy, ExternalLink, Palette, Package 
+  Clock, CheckCircle, XCircle, MessageSquare, Settings, ShieldCheck, DollarSign, UserCheck, QrCode, Copy, ExternalLink, Palette, Package, Star, TrendingDown 
 } from 'lucide-react';
 
 interface UserProps {
@@ -18,68 +18,22 @@ interface DashboardProps {
   onLogout: () => void;
 }
 
-interface Service {
-  id: string;
-  name: string;
-  duration: number;
-  price: number;
-}
+interface Service { id: string; name: string; duration: number; price: number; }
+interface Product { id: string; name: string; price: number; stock: number; }
+interface Professional { id: string; name: string; nickname: string; avatarUrl: string; email?: string; }
+interface Appointment { id: string; date: string; customer: { name: string; phone: string }; service: { name: string; price: number }; professional?: { id: string; name: string; nickname?: string }; professionalId?: string; whatsappLink?: string; }
+interface CustomerReport { id: string; name: string; phone: string; birthDate?: string | null; totalAppointments: number; totalSpent: number; lastAppointment: string | null; }
+interface Expense { id: string; description: string; amount: number; date: string; }
+interface ReviewItem { id: string; rating: number; comment?: string; createdAt: string; appointment: { customer: { name: string }; service?: { name: string }; }; }
+interface BusinessHour { id: string; dayOfWeek: number; isOpen: boolean; openTime: string; closeTime: string; lunchStart: string; lunchEnd: string; }
 
-interface Product {
-  id: string;
-  name: string;
-  price: number;
-  stock: number;
-}
-
-interface Professional {
-  id: string;
-  name: string;
-  nickname: string;
-  avatarUrl: string;
-  email?: string;
-}
-
-interface Appointment {
-  id: string;
-  date: string;
-  customer: { name: string; phone: string };
-  service: { name: string; price: number };
-  professional?: { id: string; name: string; nickname?: string };
-  professionalId?: string;
-  whatsappLink?: string;
-}
-
-interface CustomerReport {
-  id: string;
-  name: string;
-  phone: string;
-  birthDate?: string | null;
-  totalAppointments: number;
-  totalSpent: number;
-  lastAppointment: string | null;
-}
-
-interface BusinessHour {
-  id: string;
-  dayOfWeek: number;
-  isOpen: boolean;
-  openTime: string;
-  closeTime: string;
-  lunchStart: string;
-  lunchEnd: string;
-}
-
-const DAYS_OF_WEEK = [
-  'Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 
-  'Quinta-feira', 'Sexta-feira', 'Sábado'
-];
+const DAYS_OF_WEEK = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
 
 export function Dashboard({ user, onLogout }: DashboardProps) {
   const isProfessional = user?.role === 'professional';
 
   const [activeTab, setActiveTab] = useState<
-    'appointments' | 'services' | 'products' | 'professionals' | 'hours' | 'profHours' | 'financial' | 'customers' | 'qrcode' | 'appearance' | 'settings' | 'rules'
+    'appointments' | 'services' | 'products' | 'professionals' | 'hours' | 'profHours' | 'customers' | 'qrcode' | 'appearance' | 'settings' | 'rules' | 'expenses' | 'reviews'
   >('appointments');
 
   const [appointments, setAppointments] = useState<Appointment[]>([]);
@@ -88,6 +42,11 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
   const [professionals, setProfessionals] = useState<Professional[]>([]);
   const [businessHours, setBusinessHours] = useState<BusinessHour[]>([]);
   const [customers, setCustomers] = useState<CustomerReport[]>([]);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [reviews, setReviews] = useState<ReviewItem[]>([]);
+
+  const [newExpenseDesc, setNewExpenseDesc] = useState('');
+  const [newExpenseAmount, setNewExpenseAmount] = useState('');
 
   const [selectedProfForHours, setSelectedProfForHours] = useState<string>('');
   const [profHours, setProfHours] = useState<BusinessHour[]>([]);
@@ -130,6 +89,8 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
         fetchProfessionals();
         fetchBusinessHours();
         fetchCustomers();
+        fetchExpenses();
+        fetchReviews();
       }
     }
   }, [tenantId, isProfessional]);
@@ -169,7 +130,6 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
       const res = await fetch(`http://localhost:3000/appointments/${tenantId}`);
       if (res.ok) {
         let data = await res.json();
-        
         if (isProfessional && user?.id) {
           data = data.filter((app: any) => app.professionalId === user.id);
         }
@@ -190,51 +150,44 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
     } catch (err) { console.error(err); }
   }
 
-  async function fetchServices() {
-    if (!tenantId) return;
-    try {
-      const res = await fetch(`http://localhost:3000/services/${tenantId}`);
-      if (res.ok) setServices(await res.json());
-    } catch (err) { console.error(err); }
-  }
-
-  async function fetchProducts() {
-    if (!tenantId) return;
-    try {
-      const res = await fetch(`http://localhost:3000/products/${tenantId}`);
-      if (res.ok) setProducts(await res.json());
-    } catch (err) { console.error(err); }
-  }
-
-  async function fetchProfessionals() {
-    if (!tenantId) return;
-    try {
-      const res = await fetch(`http://localhost:3000/professionals/${tenantId}`);
-      if (res.ok) setProfessionals(await res.json());
-    } catch (err) { console.error(err); }
-  }
-
-  async function fetchBusinessHours() {
-    if (!tenantId) return;
-    try {
-      const res = await fetch(`http://localhost:3000/business-hours/${tenantId}`);
-      if (res.ok) setBusinessHours(await res.json());
-    } catch (err) { console.error(err); }
-  }
-
-  async function fetchCustomers() {
-    if (!tenantId) return;
-    try {
-      const res = await fetch(`http://localhost:3000/customers-report/${tenantId}`);
-      if (res.ok) setCustomers(await res.json());
-    } catch (err) { console.error(err); }
-  }
+  async function fetchServices() { try { const res = await fetch(`http://localhost:3000/services/${tenantId}`); if (res.ok) setServices(await res.json()); } catch (err) {} }
+  async function fetchProducts() { try { const res = await fetch(`http://localhost:3000/products/${tenantId}`); if (res.ok) setProducts(await res.json()); } catch (err) {} }
+  async function fetchProfessionals() { try { const res = await fetch(`http://localhost:3000/professionals/${tenantId}`); if (res.ok) setProfessionals(await res.json()); } catch (err) {} }
+  async function fetchBusinessHours() { try { const res = await fetch(`http://localhost:3000/business-hours/${tenantId}`); if (res.ok) setBusinessHours(await res.json()); } catch (err) {} }
+  async function fetchCustomers() { try { const res = await fetch(`http://localhost:3000/customers-report/${tenantId}`); if (res.ok) setCustomers(await res.json()); } catch (err) {} }
+  async function fetchExpenses() { try { const res = await fetch(`http://localhost:3000/expenses/${tenantId}`); if (res.ok) setExpenses(await res.json()); } catch (err) {} }
+  async function fetchReviews() { try { const res = await fetch(`http://localhost:3000/reviews/${tenantId}`); if (res.ok) setReviews(await res.json()); } catch (err) {} }
 
   async function fetchProfHours(profId: string) {
     try {
       const res = await fetch(`http://localhost:3000/professional-hours/${profId}`);
       if (res.ok) setProfHours(await res.json());
     } catch (err) { console.error(err); }
+  }
+
+  async function handleCreateExpense(e: React.FormEvent) {
+    e.preventDefault();
+    if (!tenantId) return;
+    try {
+      const res = await fetch('http://localhost:3000/expense', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ description: newExpenseDesc, amount: Number(newExpenseAmount), tenantId })
+      });
+      if (res.ok) {
+        setNewExpenseDesc('');
+        setNewExpenseAmount('');
+        fetchExpenses();
+      }
+    } catch (err) { alert('Erro ao cadastrar despesa.'); }
+  }
+
+  async function handleDeleteExpense(id: string) {
+    if (!confirm('Deseja excluir esta despesa?')) return;
+    try {
+      const res = await fetch(`http://localhost:3000/expense/${id}`, { method: 'DELETE' });
+      if (res.ok) fetchExpenses();
+    } catch (err) { alert('Erro ao excluir.'); }
   }
 
   async function handleCreateService(e: React.FormEvent) {
@@ -296,12 +249,7 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
         }),
       });
       if (res.ok) { 
-        setNewProfName(''); 
-        setNewProfNickname(''); 
-        setNewProfAvatar(''); 
-        setNewProfEmail(''); 
-        setNewProfPassword(''); 
-        fetchProfessionals(); 
+        setNewProfName(''); setNewProfNickname(''); setNewProfAvatar(''); setNewProfEmail(''); setNewProfPassword(''); fetchProfessionals(); 
       } else {
         alert('Erro ao cadastrar profissional.');
       }
@@ -312,10 +260,7 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
     if (!confirm(`Deseja realmente excluir o profissional ${profName}?`)) return;
     try {
       const res = await fetch(`http://localhost:3000/professional/${profId}`, { method: 'DELETE' });
-      if (res.ok) {
-        fetchProfessionals();
-        fetchAppointments();
-      }
+      if (res.ok) { fetchProfessionals(); fetchAppointments(); }
     } catch (err) { alert('Erro de conexão ao excluir.'); }
   }
 
@@ -351,10 +296,7 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
     if (!confirm('Deseja realmente cancelar este agendamento?')) return;
     try {
       const res = await fetch(`http://localhost:3000/appointment/${id}`, { method: 'DELETE' });
-      if (res.ok) {
-        fetchAppointments();
-        if (!isProfessional) fetchCustomers();
-      }
+      if (res.ok) { fetchAppointments(); if (!isProfessional) fetchCustomers(); }
     } catch (err) { alert('Erro ao cancelar agendamento'); }
   }
 
@@ -365,14 +307,9 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ pixKey: tenantPixKey }),
       });
-      if (res.ok) {
-        alert('Chave PIX salva com sucesso!');
-      } else {
-        alert('Erro ao salvar Chave PIX.');
-      }
-    } catch (err) {
-      alert('Erro de conexão.');
-    }
+      if (res.ok) alert('Chave PIX salva com sucesso!');
+      else alert('Erro ao salvar Chave PIX.');
+    } catch (err) { alert('Erro de conexão.'); }
   }
 
   async function handleSaveRules() {
@@ -380,20 +317,11 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
       const res = await fetch(`http://localhost:3000/tenant/${tenantId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          minNoticeHours: Number(minNoticeHours), 
-          requireDeposit, 
-          depositPercent: Number(depositPercent) 
-        }),
+        body: JSON.stringify({ minNoticeHours: Number(minNoticeHours), requireDeposit, depositPercent: Number(depositPercent) }),
       });
-      if (res.ok) {
-        alert('Regras de agendamento salvas com sucesso!');
-      } else {
-        alert('Erro ao salvar regras.');
-      }
-    } catch (err) {
-      alert('Erro de conexão.');
-    }
+      if (res.ok) alert('Regras de agendamento salvas com sucesso!');
+      else alert('Erro ao salvar regras.');
+    } catch (err) { alert('Erro de conexão.'); }
   }
 
   function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -403,19 +331,14 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
       reader.onloadend = async () => {
         const base64String = reader.result as string;
         setLogoPreview(base64String);
-
         try {
-          const res = await fetch(`http://localhost:3000/tenant/${tenantId}`, {
+          await fetch(`http://localhost:3000/tenant/${tenantId}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ logoUrl: base64String }),
           });
-          if (res.ok) {
-            alert('Foto de perfil do estabelecimento atualizada com sucesso!');
-          }
-        } catch (err) {
-          alert('Erro ao salvar a imagem.');
-        }
+          alert('Foto de perfil atualizada com sucesso!');
+        } catch (err) { alert('Erro ao salvar a imagem.'); }
       };
       reader.readAsDataURL(file);
     }
@@ -428,14 +351,9 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ slug: tenantSlug }),
       });
-      if (res.ok) {
-        alert('Link personalizado salvo com sucesso!');
-      } else {
-        alert('Este link já pode estar em uso.');
-      }
-    } catch (err) {
-      alert('Erro ao salvar link.');
-    }
+      if (res.ok) alert('Link personalizado salvo com sucesso!');
+      else alert('Este link já pode estar em uso.');
+    } catch (err) { alert('Erro ao salvar link.'); }
   }
 
   function handleCopyLink() {
@@ -447,10 +365,7 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
   const now = new Date();
   now.setHours(0, 0, 0, 0);
 
-  const futureAppointments = appointments.filter((app) => {
-    const appDate = new Date(app.date);
-    return appDate >= now;
-  });
+  const futureAppointments = appointments.filter((app) => new Date(app.date) >= now);
 
   const groupedByDay: { [key: string]: Appointment[] } = {};
   futureAppointments.forEach((app) => {
@@ -476,6 +391,8 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
   }
 
   const totalRevenue = appointments.reduce((acc, app) => acc + (app.service?.price || 0), 0);
+  const totalExpenses = expenses.reduce((acc, exp) => acc + exp.amount, 0);
+  const netProfit = totalRevenue - totalExpenses;
   const totalAppointmentsCount = appointments.length;
   const averageTicket = totalAppointmentsCount > 0 ? totalRevenue / totalAppointmentsCount : 0;
 
@@ -500,7 +417,7 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
         </button>
       </header>
 
-      {/* Navegação por Abas */}
+      {/* Navegação por Abas (Faturamento integrado em Despesas & Caixa) */}
       <div className="border-b border-slate-800 bg-[#1e293b]/20 px-6 flex gap-4 overflow-x-auto">
         <button onClick={() => setActiveTab('appointments')} className={`py-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap ${activeTab === 'appointments' ? 'border-emerald-500 text-emerald-400' : 'border-transparent text-slate-400 hover:text-slate-200'}`}>
           <Calendar className="w-4 h-4" /> Agendamentos Ativos ({futureAppointments.length})
@@ -508,6 +425,12 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
 
         {!isProfessional && (
           <>
+            <button onClick={() => setActiveTab('expenses')} className={`py-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap ${activeTab === 'expenses' ? 'border-emerald-500 text-emerald-400' : 'border-transparent text-slate-400 hover:text-slate-200'}`}>
+              <TrendingDown className="w-4 h-4" /> Despesas & Caixa
+            </button>
+            <button onClick={() => setActiveTab('reviews')} className={`py-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap ${activeTab === 'reviews' ? 'border-emerald-500 text-emerald-400' : 'border-transparent text-slate-400 hover:text-slate-200'}`}>
+              <Star className="w-4 h-4" /> Avaliações ({reviews.length})
+            </button>
             <button onClick={() => setActiveTab('services')} className={`py-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap ${activeTab === 'services' ? 'border-emerald-500 text-emerald-400' : 'border-transparent text-slate-400 hover:text-slate-200'}`}>
               <Briefcase className="w-4 h-4" /> Serviços ({services.length})
             </button>
@@ -525,9 +448,6 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
             </button>
             <button onClick={() => setActiveTab('rules')} className={`py-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap ${activeTab === 'rules' ? 'border-emerald-500 text-emerald-400' : 'border-transparent text-slate-400 hover:text-slate-200'}`}>
               <ShieldCheck className="w-4 h-4" /> Regras e Sinal PIX
-            </button>
-            <button onClick={() => setActiveTab('financial')} className={`py-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap ${activeTab === 'financial' ? 'border-emerald-500 text-emerald-400' : 'border-transparent text-slate-400 hover:text-slate-200'}`}>
-              <DollarSign className="w-4 h-4" /> Faturamento
             </button>
             <button onClick={() => setActiveTab('customers')} className={`py-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap ${activeTab === 'customers' ? 'border-emerald-500 text-emerald-400' : 'border-transparent text-slate-400 hover:text-slate-200'}`}>
               <UserCheck className="w-4 h-4" /> Clientes (CRM)
@@ -597,6 +517,89 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
                   </div>
                 </div>
               ))
+            )}
+          </div>
+        )}
+
+        {/* ABA DE DESPESAS E CAIXA (Centraliza entradas, saídas e lucro líquido) */}
+        {activeTab === 'expenses' && !isProfessional && (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="bg-[#1e293b] border border-slate-800 p-6 rounded-2xl h-fit space-y-4">
+              <h3 className="font-bold text-sm">Lançar Nova Despesa</h3>
+              <form onSubmit={handleCreateExpense} className="space-y-3">
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1">Descrição</label>
+                  <input type="text" required value={newExpenseDesc} onChange={(e) => setNewExpenseDesc(e.target.value)} placeholder="Ex: Aluguel, Luz, Insumos" className="w-full bg-[#0f172a] border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:border-emerald-500 focus:outline-none" />
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1">Valor (R$)</label>
+                  <input type="number" step="0.01" required value={newExpenseAmount} onChange={(e) => setNewExpenseAmount(e.target.value)} placeholder="150.00" className="w-full bg-[#0f172a] border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:border-emerald-500 focus:outline-none" />
+                </div>
+                <button type="submit" className="w-full bg-emerald-500 hover:bg-emerald-400 font-bold text-slate-950 py-2.5 rounded-xl text-xs transition-colors shadow-md shadow-emerald-500/10">Registrar Despesa</button>
+              </form>
+            </div>
+
+            <div className="md:col-span-2 space-y-4">
+              <div className="grid grid-cols-3 gap-3">
+                <div className="bg-[#1e293b] border border-slate-800 p-4 rounded-xl">
+                  <p className="text-[10px] uppercase text-slate-400">Entradas (Faturamento)</p>
+                  <p className="text-base font-bold text-emerald-400 mt-1">R$ {totalRevenue.toFixed(2)}</p>
+                </div>
+                <div className="bg-[#1e293b] border border-slate-800 p-4 rounded-xl">
+                  <p className="text-[10px] uppercase text-slate-400">Saídas (Despesas)</p>
+                  <p className="text-base font-bold text-red-400 mt-1">R$ {totalExpenses.toFixed(2)}</p>
+                </div>
+                <div className="bg-[#1e293b] border border-slate-800 p-4 rounded-xl">
+                  <p className="text-[10px] uppercase text-slate-400">Lucro Líquido</p>
+                  <p className={`text-base font-bold mt-1 ${netProfit >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>R$ {netProfit.toFixed(2)}</p>
+                </div>
+              </div>
+
+              <h3 className="font-bold text-sm">Histórico de Despesas</h3>
+              {expenses.length === 0 ? (
+                <div className="text-center py-8 bg-[#1e293b] border border-slate-800 rounded-2xl text-slate-500 text-xs">Nenhuma despesa registrada.</div>
+              ) : (
+                <div className="space-y-2">
+                  {expenses.map((exp) => (
+                    <div key={exp.id} className="bg-[#1e293b] border border-slate-800 p-4 rounded-xl flex items-center justify-between">
+                      <div>
+                        <h4 className="font-bold text-sm text-white">{exp.description}</h4>
+                        <p className="text-[10px] text-slate-400">{new Date(exp.date).toLocaleDateString('pt-BR')}</p>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="font-mono font-bold text-red-400">- R$ {exp.amount.toFixed(2)}</span>
+                        <button onClick={() => handleDeleteExpense(exp.id)} className="text-red-400 hover:text-red-300 p-1.5 bg-red-500/10 rounded-lg transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ABA DE AVALIAÇÕES */}
+        {activeTab === 'reviews' && !isProfessional && (
+          <div className="space-y-4">
+            <h2 className="text-lg font-bold">Avaliações Recebidas de Clientes Novos</h2>
+            {reviews.length === 0 ? (
+              <div className="text-center py-16 bg-[#1e293b] border border-slate-800 rounded-2xl text-slate-500 text-xs">Nenhuma avaliação recebida ainda.</div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {reviews.map((rev) => (
+                  <div key={rev.id} className="bg-[#1e293b] border border-slate-800 p-5 rounded-2xl space-y-3 shadow-md">
+                    <div className="flex items-center justify-between">
+                      <h4 className="font-bold text-white text-sm">{rev.appointment.customer?.name}</h4>
+                      <div className="flex items-center gap-1 text-amber-400 bg-amber-500/10 px-2.5 py-1 rounded-lg border border-amber-500/20">
+                        <Star className="w-3.5 h-3.5 fill-amber-400" />
+                        <span className="font-bold text-xs">{rev.rating} / 5</span>
+                      </div>
+                    </div>
+                    {rev.comment && <p className="text-xs text-slate-300 bg-[#0f172a] p-3 rounded-xl border border-slate-800">"{rev.comment}"</p>}
+                    <p className="text-[10px] text-slate-500">Serviço: {rev.appointment.service?.name || 'Atendimento'} • {new Date(rev.createdAt).toLocaleDateString('pt-BR')}</p>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
         )}
@@ -889,27 +892,7 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
           </div>
         )}
 
-        {activeTab === 'financial' && !isProfessional && (
-          <div className="space-y-6">
-            <h2 className="text-lg font-bold">Métricas de Faturamento</h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="bg-[#1e293b] border border-slate-800 p-6 rounded-2xl">
-                <p className="text-xs uppercase tracking-wider text-slate-400">Faturamento Total</p>
-                <p className="text-2xl font-bold text-emerald-400 mt-2">R$ {totalRevenue.toFixed(2)}</p>
-              </div>
-              <div className="bg-[#1e293b] border border-slate-800 p-6 rounded-2xl">
-                <p className="text-xs uppercase tracking-wider text-slate-400">Total de Atendimentos</p>
-                <p className="text-2xl font-bold text-white mt-2">{totalAppointmentsCount}</p>
-              </div>
-              <div className="bg-[#1e293b] border border-slate-800 p-6 rounded-2xl">
-                <p className="text-xs uppercase tracking-wider text-slate-400">Ticket Médio</p>
-                <p className="text-2xl font-bold text-emerald-400 mt-2">R$ {averageTicket.toFixed(2)}</p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ABA CLIENTES (CRM) COM O DESTAQUE DE ANIVERSARIANTE DO DIA */}
+        {/* ABA CLIENTES (CRM) COM ALERTA DE ANIVERSARIANTE */}
         {activeTab === 'customers' && !isProfessional && (
           <div className="space-y-4">
             <h2 className="text-lg font-bold">Base de Clientes (CRM)</h2>
