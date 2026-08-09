@@ -18,7 +18,8 @@ model Tenant {
   themeColor      String          @default("emerald")
   logoUrl         String?
   pixKey          String?         
-  isActive        Boolean         @default(true) // <--- CAMPO DE CONTROLE DE BLOQUEIO ADICIONADO
+  isActive        Boolean         @default(false) // Nasce bloqueada aguardando pagamento
+  dueDate         DateTime?       // <--- Data de vencimento da assinatura
   
   minNoticeHours  Int             @default(2)     
   requireDeposit  Boolean         @default(false) 
@@ -59,7 +60,7 @@ model Product {
   price       Float
   stock       Int      @default(0)
   tenantId    String
-  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+  tenant      Tenant   @relation(fields: [tenantId], references: [id])
 }
 
 model Professional {

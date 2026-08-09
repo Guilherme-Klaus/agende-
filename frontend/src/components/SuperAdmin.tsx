@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Building2, ShieldAlert, LogOut, Copy, Check, Trash2, Lock, Unlock } from 'lucide-react';
+import { Building2, ShieldAlert, LogOut, Copy, Check, Trash2, Lock, Unlock, Search, Calendar } from 'lucide-react';
 
 interface Tenant {
   id: string;
@@ -8,6 +8,7 @@ interface Tenant {
   whatsapp: string;
   createdAt: string;
   isActive: boolean;
+  dueDate?: string;
   users?: { id: string; email: string }[];
 }
 
@@ -19,6 +20,8 @@ export function SuperAdmin({ onLogout }: SuperAdminProps) {
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [editingEmails, setEditingEmails] = useState<{ [key: string]: string }>({});
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'blocked'>('all');
 
   useEffect(() => {
     fetchTenants();
@@ -51,6 +54,25 @@ export function SuperAdmin({ onLogout }: SuperAdminProps) {
       }
     } catch (err) {
       alert('Erro de conexão ao alterar status.');
+    }
+  }
+
+  async function handleUpdateDueDate(tenantId: string, newDate: string) {
+    try {
+      const res = await fetch(`http://localhost:3000/admin/update-tenant-due-date/${tenantId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dueDate: newDate || null }),
+      });
+
+      if (res.ok) {
+        alert('Data de vencimento atualizada!');
+        fetchTenants();
+      } else {
+        alert('Erro ao atualizar vencimento.');
+      }
+    } catch (err) {
+      alert('Erro de conexão.');
     }
   }
 
@@ -102,6 +124,16 @@ export function SuperAdmin({ onLogout }: SuperAdminProps) {
     }
   }
 
+  // Filtragem de empresas (Busca + Filtro de Status)
+  const filteredTenants = tenants.filter((tenant) => {
+    const matchesSearch = tenant.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                          tenant.id.toLowerCase().includes(searchQuery.toLowerCase());
+    
+    if (statusFilter === 'active') return matchesSearch && tenant.isActive;
+    if (statusFilter === 'blocked') return matchesSearch && !tenant.isActive;
+    return matchesSearch;
+  });
+
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col">
       <header className="border-b border-zinc-800 bg-zinc-900/50 px-6 py-4 flex items-center justify-between">
@@ -123,26 +155,44 @@ export function SuperAdmin({ onLogout }: SuperAdminProps) {
       </header>
 
       <main className="flex-1 p-6 max-w-6xl mx-auto w-full space-y-6">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col md:flex-row items-center justify-between gap-4">
           <div>
             <h2 className="text-lg font-semibold">Empresas Assinantes</h2>
-            <p className="text-xs text-zinc-400">Total de negócios utilizando a plataforma: {tenants.length}</p>
+            <p className="text-xs text-zinc-400">Total filtrado: {filteredTenants.length} de {tenants.length} empresas</p>
           </div>
-          <button
-            onClick={fetchTenants}
-            className="bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 text-xs px-4 py-2 rounded-xl transition-colors"
-          >
-            🔄 Atualizar Lista
-          </button>
+
+          {/* Barra de Pesquisa e Filtros */}
+          <div className="flex items-center gap-3 w-full md:w-auto">
+            <div className="relative flex-1 md:w-64">
+              <Search className="w-4 h-4 text-zinc-500 absolute left-3 top-3" />
+              <input
+                type="text"
+                placeholder="Pesquisar empresa..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full bg-zinc-900 border border-zinc-800 rounded-xl pl-9 pr-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-amber-500"
+              />
+            </div>
+
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value as any)}
+              className="bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-300 focus:outline-none focus:border-amber-500"
+            >
+              <option value="all">Todas</option>
+              <option value="active">Ativas</option>
+              <option value="blocked">Bloqueadas</option>
+            </select>
+          </div>
         </div>
 
-        {tenants.length === 0 ? (
+        {filteredTenants.length === 0 ? (
           <div className="text-center py-16 bg-zinc-900 border border-zinc-800 rounded-2xl text-zinc-500 text-sm">
-            Nenhuma empresa cadastrada no sistema ainda.
+            Nenhuma empresa encontrada.
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {tenants.map((tenant) => {
+            {filteredTenants.map((tenant) => {
               const adminUser = tenant.users && tenant.users.length > 0 ? tenant.users[0] : null;
 
               return (
@@ -171,9 +221,23 @@ export function SuperAdmin({ onLogout }: SuperAdminProps) {
                       </button>
                     </div>
 
-                    <span className="text-[10px] bg-amber-500/10 border border-amber-500/20 text-amber-400 px-2.5 py-1 rounded-md font-medium uppercase tracking-wider inline-block">
-                      {tenant.category || 'Geral'}
-                    </span>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] bg-amber-500/10 border border-amber-500/20 text-amber-400 px-2.5 py-1 rounded-md font-medium uppercase tracking-wider inline-block">
+                        {tenant.category || 'Geral'}
+                      </span>
+                      
+                      {/* Campo de Data de Vencimento */}
+                      <div className="flex items-center gap-1.5 text-xs text-zinc-400">
+                        <Calendar className="w-3.5 h-3.5 text-amber-500" />
+                        <span>Vencimento:</span>
+                        <input
+                          type="date"
+                          defaultValue={tenant.dueDate ? tenant.dueDate.split('T')[0] : ''}
+                          onBlur={(e) => handleUpdateDueDate(tenant.id, e.target.value)}
+                          className="bg-zinc-950 border border-zinc-800 rounded px-2 py-1 text-[11px] text-zinc-200 focus:border-amber-500 outline-none"
+                        />
+                      </div>
+                    </div>
 
                     <p className="text-xs text-zinc-400">📞 WhatsApp: {tenant.whatsapp || 'Não informado'}</p>
                     <p className="text-[11px] text-zinc-500 font-mono bg-zinc-950 p-2 rounded-lg border border-zinc-800/60 truncate">

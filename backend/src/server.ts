@@ -51,6 +51,23 @@ app.put('/admin/toggle-tenant-status/:tenantId', async (req: Request, res: Respo
   }
 });
 
+// --- ADMIN GLOBAL: ATUALIZAR DATA DE VENCIMENTO ---
+app.put('/admin/update-tenant-due-date/:tenantId', async (req: Request, res: Response) => {
+  try {
+    const { tenantId } = req.params;
+    const { dueDate } = req.body;
+
+    const updatedTenant = await prisma.tenant.update({
+      where: { id: tenantId },
+      data: { dueDate: dueDate ? new Date(dueDate) : null },
+    });
+
+    return res.status(200).json({ message: 'Data de vencimento atualizada com sucesso!', tenant: updatedTenant });
+  } catch (error) {
+    return res.status(400).json({ error: 'Erro ao atualizar data de vencimento.' });
+  }
+});
+
 // --- TENANTS ---
 app.post('/tenant', async (req: Request, res: Response) => {
   try {
@@ -74,7 +91,7 @@ app.post('/tenant', async (req: Request, res: Response) => {
         minNoticeHours: minNoticeHours !== undefined ? Number(minNoticeHours) : 2,
         requireDeposit: requireDeposit !== undefined ? Boolean(requireDeposit) : false,
         depositPercent: depositPercent !== undefined ? Number(depositPercent) : 50,
-        isActive: false // <--- CONTA NASCE BLOQUEADA ATÉ VOCÊ APROVAR O PAGAMENTO
+        isActive: false // Nasce bloqueada aguardando pagamento
       },
     });
 
@@ -262,7 +279,7 @@ app.post('/user', async (req: Request, res: Response) => {
     const { password: _, ...userWithoutPassword } = newUser;
     return res.status(201).json(userWithoutPassword);
   } catch (error) {
-    return res.status(400).json({ error: 'Erro ao criar usuário.' });
+    return res.status(400).json({ error: 'Erro ao criar usuário administrador.' });
   }
 });
 
@@ -274,10 +291,6 @@ app.post('/login', async (req: Request, res: Response) => {
       include: { tenant: true },
     });
     if (!user) return res.status(401).json({ error: 'E-mail ou senha inválidos.' });
-
-    if (user.tenant && !user.tenant.isActive) {
-      return res.status(403).json({ error: 'Conta bloqueada, contatar suporte' });
-    }
 
     const passwordMatch = await bcrypt.compare(password, user.password);
     if (!passwordMatch) return res.status(401).json({ error: 'E-mail ou senha inválidos.' });
@@ -291,6 +304,7 @@ app.post('/login', async (req: Request, res: Response) => {
         email: user.email,
         tenantId: user.tenantId,
         tenantName: user.tenant ? user.tenant.name : 'Super Admin',
+        isActive: user.tenant ? user.tenant.isActive : true,
         role: 'admin',
       },
     });
@@ -310,10 +324,6 @@ app.post('/professional-login', async (req: Request, res: Response) => {
       return res.status(401).json({ error: 'E-mail ou senha inválidos.' });
     }
 
-    if (professional.tenant && !professional.tenant.isActive) {
-      return res.status(403).json({ error: 'Conta bloqueada, contatar suporte' });
-    }
-
     const passwordMatch = await bcrypt.compare(password, professional.password);
     if (!passwordMatch) {
       return res.status(401).json({ error: 'E-mail ou senha inválidos.' });
@@ -325,6 +335,7 @@ app.post('/professional-login', async (req: Request, res: Response) => {
         email: professional.email,
         tenantId: professional.tenantId,
         tenantName: professional.tenant.name,
+        isActive: professional.tenant.isActive,
         role: 'professional',
       }
     });
@@ -614,13 +625,8 @@ cron.schedule('0 20 * * *', async () => {
     const startOfTomorrow = new Date(new Date(tomorrow).setHours(0, 0, 0, 0));
     const endOfTomorrow = new Date(new Date(tomorrow).setHours(23, 59, 59, 999));
 
-    const transporter = nodemailer.createTransport({
-      host: 'smtp.seudominio.com',
-      port: 587,
-      auth: { user: 'seu_usuario', pass: 'sua_senha' }
-    });
-
     for (const tenant of tenants) {
+      if (!tenant.isActive) continue;
       const adminEmail = tenant.users && tenant.users.length > 0 ? tenant.users[0].email : null;
       if (!adminEmail) continue;
 
@@ -633,13 +639,6 @@ cron.schedule('0 20 * * *', async () => {
       });
 
       if (appointments.length === 0) continue;
-
-      let htmlContent = `<h2>Resumo da Agenda para Amanhân - ${tenant.name}</h2><ul>`;
-      appointments.forEach(app => {
-        const timeStr = new Date(app.date).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-        htmlContent += `<li>⏰ <strong>${timeStr}</strong> - Cliente: ${app.customer?.name} (${app.customer?.phone}) - Serviço: ${app.service?.name}</li>`;
-      });
-      htmlContent += `</ul>`;
 
       console.log(`[RESUMO 20H] Resumo gerado para ${tenant.name} (${adminEmail}) com ${appointments.length} agendamentos.`);
     }

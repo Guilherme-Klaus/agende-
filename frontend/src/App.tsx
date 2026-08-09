@@ -4,7 +4,7 @@ import { Dashboard } from './components/Dashboard';
 import { SuperAdmin } from './components/SuperAdmin';
 import { Register } from './components/Register';
 import { ClientBooking } from './ClientBooking';
-import { ShieldCheck, LogIn, UserPlus } from 'lucide-react';
+import { ShieldCheck, LogIn, UserPlus, AlertTriangle } from 'lucide-react';
 
 export function App() {
   const [user, setUser] = useState<any>(null);
@@ -35,7 +35,6 @@ export function App() {
     }
 
     try {
-      // Tenta login como admin do estabelecimento
       let res = await fetch('http://localhost:3000/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -51,14 +50,6 @@ export function App() {
         return;
       }
 
-      // Se o servidor retornou erro (ex: 403 Conta bloqueada ou 401 Credenciais inválidas)
-      if (res.status === 403 || res.status === 401) {
-        setError(data.error || 'E-mail ou senha inválidos.');
-        setLoading(false);
-        return;
-      }
-
-      // Se falhar, tenta login como profissional
       res = await fetch('http://localhost:3000/professional-login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -96,11 +87,21 @@ export function App() {
           path="/*"
           element={
             user && user.tenantId ? (
-              user.tenantId === 'super-admin' ? (
-                <SuperAdmin onLogout={handleLogout} />
-              ) : (
-                <Dashboard user={user} onLogout={handleLogout} />
-              )
+              <div className="relative">
+                {/* --- AVISO DE CONTA INATIVA/PENDENTE DE PAGAMENTO NO TOPO --- */}
+                {user.tenantId !== 'super-admin' && user.isActive === false && (
+                  <div className="bg-amber-500 text-zinc-950 px-4 py-2 text-center text-xs font-bold flex items-center justify-center gap-2 shadow-md">
+                    <AlertTriangle className="w-4 h-4" />
+                    Sua conta está aguardando confirmação de pagamento. Entre em contato com o suporte para liberar o acesso total.
+                  </div>
+                )}
+
+                {user.tenantId === 'super-admin' ? (
+                  <SuperAdmin onLogout={handleLogout} />
+                ) : (
+                  <Dashboard user={user} onLogout={handleLogout} />
+                )}
+              </div>
             ) : view === 'register' ? (
               <Register
                 onRegisterSuccess={() => setView('login')}
