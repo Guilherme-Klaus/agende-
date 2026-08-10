@@ -14,6 +14,7 @@ interface Tenant {
   minNoticeHours: number;
   requireDeposit: boolean;
   depositPercent: number;
+  portfolioPhotos?: string;
 }
 
 interface Service {
@@ -54,13 +55,6 @@ interface AppointmentHistory {
   professional?: { name: string };
   review?: { rating: number; comment?: string };
 }
-
-const themes: Record<string, { primary: string, border: string, bgSoft: string, text: string, shadow: string, ring: string }> = {
-  emerald: { primary: 'bg-emerald-500 hover:bg-emerald-400 text-slate-950', border: 'border-emerald-500/50', bgSoft: 'bg-emerald-500/10', text: 'text-emerald-400', shadow: 'shadow-emerald-500/20', ring: 'focus:border-emerald-500' },
-  blue: { primary: 'bg-blue-600 hover:bg-blue-500 text-white', border: 'border-blue-500/50', bgSoft: 'bg-blue-500/10', text: 'text-blue-400', shadow: 'shadow-blue-500/20', ring: 'focus:border-blue-500' },
-  purple: { primary: 'bg-purple-600 hover:bg-purple-500 text-white', border: 'border-purple-500/50', bgSoft: 'bg-purple-500/10', text: 'text-purple-400', shadow: 'shadow-purple-500/20', ring: 'focus:border-purple-500' },
-  pink: { primary: 'bg-pink-600 hover:bg-pink-500 text-white', border: 'border-pink-500/50', bgSoft: 'bg-pink-500/10', text: 'text-pink-400', shadow: 'shadow-pink-500/20', ring: 'focus:border-pink-500' },
-};
 
 export function ClientBooking() {
   const { tenantId } = useParams<{ tenantId: string }>();
@@ -235,6 +229,7 @@ export function ClientBooking() {
       if (res.ok) {
         alert('Obrigado pela sua avaliação!');
         setShowReviewModal(false);
+        handleSearchHistory({ preventDefault: () => {} } as any);
       } else {
         alert('Erro ao enviar avaliação.');
       }
@@ -357,11 +352,6 @@ export function ClientBooking() {
       });
 
       if (appointmentRes.ok) {
-        const appointmentData = await appointmentRes.json();
-        if (appointmentData.isNewCustomer) {
-          setReviewAppointmentId(appointmentData.id);
-          setShowReviewModal(true);
-        }
         setStep('success');
       } else {
         const errData = await appointmentRes.json();
@@ -388,7 +378,7 @@ export function ClientBooking() {
   if (!tenant) return <div className="min-h-screen bg-[#0f172a] text-slate-100 flex items-center justify-center">Carregando...</div>;
 
   const timeSlots = generateTimeSlots();
-  const activeTheme = themes[tenant?.themeColor || 'emerald'] || themes.emerald;
+  const customColor = tenant?.themeColor || '#10b981';
   const depositAmount = tenant.requireDeposit ? (totalPrice * tenant.depositPercent) / 100 : totalPrice;
 
   return (
@@ -410,7 +400,7 @@ export function ClientBooking() {
               <textarea value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Deixe um comentário opcional..." className="w-full bg-[#0f172a] border border-slate-800 rounded-xl px-3 py-2 text-xs text-white h-20 resize-none focus:outline-none" />
               <div className="flex gap-2">
                 <button type="button" onClick={() => setShowReviewModal(false)} className="w-full bg-slate-800 text-slate-300 py-2.5 rounded-xl text-xs">Pular</button>
-                <button type="submit" className={`w-full font-bold py-2.5 rounded-xl text-xs ${activeTheme.primary}`}>Enviar Avaliação</button>
+                <button type="submit" style={{ backgroundColor: customColor }} className="w-full font-bold text-slate-950 py-2.5 rounded-xl text-xs shadow-lg">Enviar Avaliação</button>
               </div>
             </form>
           </div>
@@ -420,7 +410,10 @@ export function ClientBooking() {
       <div className="bg-[#1e293b] border-b border-slate-800 px-6 py-8">
         <div className="max-w-5xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <div className={`w-16 h-16 border rounded-2xl flex items-center justify-center overflow-hidden ${activeTheme.bgSoft} ${activeTheme.border} ${activeTheme.text}`}>
+            <div 
+              style={{ borderColor: `${customColor}50`, backgroundColor: `${customColor}15`, color: customColor }}
+              className="w-16 h-16 border rounded-2xl flex items-center justify-center overflow-hidden shadow-sm"
+            >
               {tenant.logoUrl ? (
                 <img src={tenant.logoUrl} alt="Logo" className="w-full h-full object-cover" />
               ) : (
@@ -429,9 +422,9 @@ export function ClientBooking() {
             </div>
             <div>
               <h1 className="text-2xl font-bold text-white">{tenant.name}</h1>
-              <p className={`text-xs font-medium uppercase tracking-wider mt-1 ${activeTheme.text}`}>{tenant.category || 'Estabelecimento'}</p>
+              <p style={{ color: customColor }} className="text-xs font-medium uppercase tracking-wider mt-1">{tenant.category || 'Estabelecimento'}</p>
               <p className="text-xs text-slate-400 mt-1 flex items-center gap-1">
-                <MapPin className={`w-3.5 h-3.5 ${activeTheme.text}`} /> {tenant.address || 'Endereço não informado'}
+                <MapPin style={{ color: customColor }} className="w-3.5 h-3.5" /> {tenant.address || 'Endereço não informado'}
               </p>
             </div>
           </div>
@@ -450,50 +443,82 @@ export function ClientBooking() {
       <main className="max-w-5xl mx-auto px-6 mt-8">
         
         {mode === 'home' && step !== 'success' && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-2xl mx-auto mt-12">
-            <div 
-              onClick={() => { setMode('services'); setStep('services'); }}
-              className="bg-[#1e293b] border border-slate-800 hover:border-emerald-500/50 p-8 rounded-3xl cursor-pointer text-center space-y-4 shadow-xl transition-all group"
-            >
-              <div className={`w-16 h-16 rounded-2xl mx-auto flex items-center justify-center ${activeTheme.bgSoft} ${activeTheme.border} ${activeTheme.text}`}>
-                <Calendar className="w-8 h-8" />
+          <div className="space-y-12">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-2xl mx-auto mt-6">
+              <div 
+                onClick={() => { setMode('services'); setStep('services'); }}
+                style={{ '--hover-color': customColor } as React.CSSProperties}
+                className="bg-[#1e293b] border border-slate-800 hover:border-[var(--hover-color)] p-8 rounded-3xl cursor-pointer text-center space-y-4 shadow-xl transition-all group"
+              >
+                <div 
+                  style={{ borderColor: `${customColor}50`, backgroundColor: `${customColor}15`, color: customColor }}
+                  className="w-16 h-16 rounded-2xl mx-auto flex items-center justify-center border"
+                >
+                  <Calendar className="w-8 h-8" />
+                </div>
+                <h2 style={{ '--hover-text': customColor } as React.CSSProperties} className="text-lg font-bold text-white group-hover:text-[var(--hover-text)] transition-colors">Novo Agendamento</h2>
+                <p className="text-xs text-slate-400">Escolha os serviços, produtos de balcão e horários disponíveis.</p>
               </div>
-              <h2 className="text-lg font-bold text-white group-hover:text-emerald-400 transition-colors">Novo Agendamento</h2>
-              <p className="text-xs text-slate-400">Escolha os serviços, produtos de balcão e horários disponíveis.</p>
+
+              <div className="bg-[#1e293b] border border-slate-800 p-8 rounded-3xl space-y-4 shadow-xl">
+                <div 
+                  style={{ borderColor: `${customColor}50`, backgroundColor: `${customColor}15`, color: customColor }}
+                  className="w-16 h-16 rounded-2xl mx-auto flex items-center justify-center border"
+                >
+                  <History className="w-8 h-8" />
+                </div>
+                <h2 className="text-lg font-bold text-white text-center">Meus Agendamentos</h2>
+                <form onSubmit={handleSearchHistory} className="space-y-3">
+                  <input 
+                    type="text" 
+                    required 
+                    placeholder="Seu WhatsApp (com DDD)" 
+                    value={searchPhone}
+                    onChange={(e) => setSearchPhone(e.target.value)}
+                    className="w-full bg-[#0f172a] border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-slate-600"
+                  />
+                  <button 
+                    type="submit"
+                    style={{ backgroundColor: customColor }}
+                    className="w-full font-bold py-2.5 rounded-xl text-xs text-slate-950 transition-colors shadow-md"
+                  >
+                    Ver Histórico
+                  </button>
+                </form>
+              </div>
             </div>
 
-            <div className="bg-[#1e293b] border border-slate-800 p-8 rounded-3xl space-y-4 shadow-xl">
-              <div className={`w-16 h-16 rounded-2xl mx-auto flex items-center justify-center ${activeTheme.bgSoft} ${activeTheme.border} ${activeTheme.text}`}>
-                <History className="w-8 h-8" />
-              </div>
-              <h2 className="text-lg font-bold text-white text-center">Meus Agendamentos</h2>
-              <form onSubmit={handleSearchHistory} className="space-y-3">
-                <input 
-                  type="text" 
-                  required 
-                  placeholder="Seu WhatsApp (com DDD)" 
-                  value={searchPhone}
-                  onChange={(e) => setSearchPhone(e.target.value)}
-                  className={`w-full bg-[#0f172a] border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none ${activeTheme.ring}`}
-                />
-                <button 
-                  type="submit"
-                  className={`w-full font-bold py-2.5 rounded-xl text-xs transition-colors shadow-md ${activeTheme.primary} ${activeTheme.shadow}`}
-                >
-                  Ver Histórico
-                </button>
-              </form>
-            </div>
+            {/* SEÇÃO DO PORTFÓLIO DE FOTOS NA PÁGINA PÚBLICA */}
+            {tenant.portfolioPhotos && (() => {
+              try {
+                const photos: string[] = JSON.parse(tenant.portfolioPhotos);
+                if (photos.length === 0) return null;
+                return (
+                  <div className="max-w-3xl mx-auto space-y-4 pt-6 border-t border-slate-800">
+                    <h3 className="text-sm font-bold text-white text-center uppercase tracking-wider">Portfólio de Trabalhos</h3>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      {photos.map((photoUrl, idx) => (
+                        <div key={idx} className="rounded-2xl overflow-hidden border border-slate-800 bg-[#1e293b] aspect-square shadow-lg">
+                          <img src={photoUrl} alt="Trabalho realizado" className="w-full h-full object-cover hover:scale-105 transition-transform duration-300" />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              } catch {
+                return null;
+              }
+            })()}
           </div>
         )}
 
         {mode === 'history' && (
           <div className="space-y-6 max-w-2xl mx-auto">
-            <button onClick={() => setMode('home')} className={`text-xs hover:underline flex items-center gap-1 font-medium ${activeTheme.text}`}>
+            <button onClick={() => setMode('home')} style={{ color: customColor }} className="text-xs hover:underline flex items-center gap-1 font-medium">
               <ArrowLeft className="w-4 h-4" /> Voltar ao início
             </button>
 
-            <h2 className="text-xl font-bold text-white">Seus Agendamentos</h2>
+            <h2 className="text-xl font-bold text-white">Seus Agendamentos e Avaliações</h2>
 
             {clientAppointments.length === 0 ? (
               <div className="bg-[#1e293b] border border-slate-800 p-8 rounded-2xl text-center text-slate-400 text-xs">
@@ -504,28 +529,49 @@ export function ClientBooking() {
                 {clientAppointments.map((app) => {
                   const dateObj = new Date(app.date);
                   const isPast = dateObj < new Date();
+                  const isNewCustomer = clientAppointments.length === 1;
 
                   return (
-                    <div key={app.id} className="bg-[#1e293b] border border-slate-800 p-5 rounded-2xl flex items-center justify-between gap-4">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs bg-slate-900 text-emerald-300 px-2.5 py-1 rounded-md font-mono font-bold border border-slate-700">
-                            {dateObj.toLocaleDateString('pt-BR')} às {dateObj.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                          </span>
-                          {isPast && <span className="text-[10px] bg-slate-800 text-slate-400 px-2 py-0.5 rounded">Realizado</span>}
+                    <div key={app.id} className="bg-[#1e293b] border border-slate-800 p-5 rounded-2xl flex flex-col justify-between gap-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span style={{ color: customColor, borderColor: `${customColor}40`, backgroundColor: `${customColor}10` }} className="text-xs px-2.5 py-1 rounded-md font-mono font-bold border">
+                              {dateObj.toLocaleDateString('pt-BR')} às {dateObj.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                            {isPast && <span className="text-[10px] bg-slate-800 text-slate-400 px-2 py-0.5 rounded">Realizado</span>}
+                          </div>
+                          <h4 className="font-bold text-white text-sm mt-2">{app.service?.name || 'Atendimento'}</h4>
+                          {app.professional && <p className="text-xs text-slate-400">Profissional: {app.professional.name}</p>}
                         </div>
-                        <h4 className="font-bold text-white text-sm mt-2">{app.service?.name || 'Atendimento'}</h4>
-                        {app.professional && <p className="text-xs text-slate-400">Profissional: {app.professional.name}</p>}
+
+                        {!isPast && (
+                          <button 
+                            onClick={() => handleCancelAppointment(app.id)}
+                            className="bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 p-2.5 rounded-xl transition-colors"
+                            title="Cancelar Agendamento"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
                       </div>
 
-                      {!isPast && (
-                        <button 
-                          onClick={() => handleCancelAppointment(app.id)}
-                          className="bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 p-2.5 rounded-xl transition-colors"
-                          title="Cancelar Agendamento"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                      {isPast && isNewCustomer && (
+                        <div className="pt-3 border-t border-slate-800 flex items-center justify-between">
+                          {app.review ? (
+                            <div className="flex items-center gap-1.5 text-xs text-amber-400">
+                              <Star className="w-4 h-4 fill-amber-400" />
+                              <span>Sua nota: {app.review.rating}/5 {app.review.comment ? `- "${app.review.comment}"` : ''}</span>
+                            </div>
+                          ) : (
+                            <button 
+                              onClick={() => { setReviewAppointmentId(app.id); setShowReviewModal(true); }}
+                              className="bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors"
+                            >
+                              <Star className="w-3.5 h-3.5" /> Avaliar Atendimento
+                            </button>
+                          )}
+                        </div>
                       )}
                     </div>
                   );
@@ -538,13 +584,14 @@ export function ClientBooking() {
         {mode === 'services' && step === 'services' && (
           <div className="space-y-8">
             <div className="flex items-center justify-between">
-              <button onClick={() => setMode('home')} className={`text-xs hover:underline flex items-center gap-1 font-medium ${activeTheme.text}`}>
+              <button onClick={() => setMode('home')} style={{ color: customColor }} className="text-xs hover:underline flex items-center gap-1 font-medium">
                 <ArrowLeft className="w-4 h-4" /> Voltar
               </button>
               {(selectedServiceIds.length > 0 || selectedProductIds.length > 0) && (
                 <button 
                   onClick={() => setStep('booking')}
-                  className={`font-bold px-6 py-2.5 rounded-xl text-xs transition-colors shadow-md flex items-center gap-2 ${activeTheme.primary} ${activeTheme.shadow}`}
+                  style={{ backgroundColor: customColor }}
+                  className="font-bold px-6 py-2.5 rounded-xl text-xs text-slate-950 transition-colors shadow-md flex items-center gap-2"
                 >
                   Continuar (R$ {totalPrice.toFixed(2)}) <ArrowRight className="w-4 h-4" />
                 </button>
@@ -560,15 +607,19 @@ export function ClientBooking() {
                     <div 
                       key={service.id} 
                       onClick={() => handleToggleService(service.id)}
+                      style={isSelected ? { borderColor: customColor, backgroundColor: `${customColor}10` } : {}}
                       className={`p-5 rounded-2xl border cursor-pointer transition-all flex items-center justify-between shadow-md ${
-                        isSelected ? `${activeTheme.bgSoft} ${activeTheme.border}` : 'bg-[#1e293b] border-slate-800 hover:border-slate-700'
+                        isSelected ? '' : 'bg-[#1e293b] border-slate-800 hover:border-slate-700'
                       }`}
                     >
                       <div>
                         <h3 className="font-bold text-white text-sm">{service.name}</h3>
                         <p className="text-xs text-slate-400 mt-1">R$ {service.price.toFixed(2)} • {service.duration} min</p>
                       </div>
-                      <div className={`w-6 h-6 rounded-lg border flex items-center justify-center ${isSelected ? `${activeTheme.primary.split(' ')[0]} border-transparent text-slate-950` : 'border-slate-700 bg-[#0f172a]'}`}>
+                      <div 
+                        style={isSelected ? { backgroundColor: customColor, borderColor: 'transparent' } : {}}
+                        className={`w-6 h-6 rounded-lg border flex items-center justify-center ${isSelected ? 'text-slate-950' : 'border-slate-700 bg-[#0f172a]'}`}
+                      >
                         {isSelected && <CheckCircle className="w-4 h-4" />}
                       </div>
                     </div>
@@ -580,7 +631,7 @@ export function ClientBooking() {
             {products.length > 0 && (
               <div className="space-y-4 pt-4 border-t border-slate-800">
                 <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                  <Package className="w-5 h-5 text-emerald-400" /> 2. Produtos de Balcão (Opcional)
+                  <Package style={{ color: customColor }} className="w-5 h-5" /> 2. Produtos de Balcão (Opcional)
                 </h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {products.map((product) => {
@@ -589,15 +640,19 @@ export function ClientBooking() {
                       <div 
                         key={product.id} 
                         onClick={() => handleToggleProduct(product.id)}
+                        style={isSelected ? { borderColor: customColor, backgroundColor: `${customColor}10` } : {}}
                         className={`p-5 rounded-2xl border cursor-pointer transition-all flex items-center justify-between shadow-md ${
-                          isSelected ? `${activeTheme.bgSoft} ${activeTheme.border}` : 'bg-[#1e293b] border-slate-800 hover:border-slate-700'
+                          isSelected ? '' : 'bg-[#1e293b] border-slate-800 hover:border-slate-700'
                         }`}
                       >
                         <div>
                           <h3 className="font-bold text-white text-sm">{product.name}</h3>
-                          <p className="text-xs text-slate-400 mt-1">R$ {product.price.toFixed(2)} • Estoque disponivel</p>
+                          <p className="text-xs text-slate-400 mt-1">R$ {product.price.toFixed(2)} • Estoque disponível</p>
                         </div>
-                        <div className={`w-6 h-6 rounded-lg border flex items-center justify-center ${isSelected ? `${activeTheme.primary.split(' ')[0]} border-transparent text-slate-950` : 'border-slate-700 bg-[#0f172a]'}`}>
+                        <div 
+                          style={isSelected ? { backgroundColor: customColor, borderColor: 'transparent' } : {}}
+                          className={`w-6 h-6 rounded-lg border flex items-center justify-center ${isSelected ? 'text-slate-950' : 'border-slate-700 bg-[#0f172a]'}`}
+                        >
                           {isSelected && <CheckCircle className="w-4 h-4" />}
                         </div>
                       </div>
@@ -611,7 +666,7 @@ export function ClientBooking() {
 
         {mode === 'services' && step === 'booking' && (
           <div className="bg-[#1e293b] border border-slate-800 p-6 md:p-8 rounded-3xl space-y-6 shadow-2xl">
-            <button onClick={() => setStep('services')} className={`text-xs hover:underline flex items-center gap-1 font-medium ${activeTheme.text}`}>
+            <button onClick={() => setStep('services')} style={{ color: customColor }} className="text-xs hover:underline flex items-center gap-1 font-medium">
               <ArrowLeft className="w-4 h-4" /> Voltar e alterar itens
             </button>
 
@@ -624,7 +679,7 @@ export function ClientBooking() {
                     <p className="text-[10px] uppercase font-semibold text-slate-400">Serviços:</p>
                     <div className="flex flex-wrap gap-2 mt-1">
                       {selectedServicesList.map(s => (
-                        <span key={s.id} className={`text-xs px-3 py-1 rounded-xl border ${activeTheme.bgSoft} ${activeTheme.border} ${activeTheme.text}`}>
+                        <span key={s.id} style={{ color: customColor, borderColor: `${customColor}40`, backgroundColor: `${customColor}10` }} className="text-xs px-3 py-1 rounded-xl border">
                           {s.name} (R$ {s.price.toFixed(2)} • {s.duration} min)
                         </span>
                       ))}
@@ -657,8 +712,9 @@ export function ClientBooking() {
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 <div 
                   onClick={() => setSelectedProfessional(null)} 
+                  style={!selectedProfessional ? { borderColor: customColor, backgroundColor: `${customColor}15`, color: customColor } : {}}
                   className={`cursor-pointer p-3 rounded-2xl border text-center transition-all ${
-                    !selectedProfessional ? `${activeTheme.bgSoft} ${activeTheme.border} ${activeTheme.text}` : 'bg-[#0f172a] border-slate-800 text-slate-400'
+                    !selectedProfessional ? '' : 'bg-[#0f172a] border-slate-800 text-slate-400'
                   }`}
                 >
                   <div className="w-12 h-12 bg-slate-800 rounded-full mx-auto mb-2 flex items-center justify-center text-xs">🔄</div>
@@ -669,8 +725,9 @@ export function ClientBooking() {
                   <div 
                     key={prof.id} 
                     onClick={() => setSelectedProfessional(prof)} 
+                    style={selectedProfessional?.id === prof.id ? { borderColor: customColor, backgroundColor: `${customColor}15`, color: customColor } : {}}
                     className={`cursor-pointer p-3 rounded-2xl border text-center transition-all ${
-                      selectedProfessional?.id === prof.id ? `${activeTheme.bgSoft} ${activeTheme.border} ${activeTheme.text}` : 'bg-[#0f172a] border-slate-800 text-slate-400'
+                      selectedProfessional?.id === prof.id ? '' : 'bg-[#0f172a] border-slate-800 text-slate-400'
                     }`}
                   >
                     <img 
@@ -689,7 +746,13 @@ export function ClientBooking() {
               <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3">Selecione a Data</label>
               <div className="flex gap-2 overflow-x-auto pb-2">
                 {nextDays.map((d) => (
-                  <button key={d.dateString} type="button" onClick={() => { setSelectedDate(d.dateString); setSelectedTime(''); }} className={`flex-shrink-0 px-4 py-3 rounded-2xl border text-center transition-all ${selectedDate === d.dateString ? `${activeTheme.primary} font-bold border-transparent shadow-md` : 'bg-[#0f172a] border-slate-800 text-slate-300'}`}>
+                  <button 
+                    key={d.dateString} 
+                    type="button" 
+                    onClick={() => { setSelectedDate(d.dateString); setSelectedTime(''); }} 
+                    style={selectedDate === d.dateString ? { backgroundColor: customColor, color: '#090d16' } : {}}
+                    className={`flex-shrink-0 px-4 py-3 rounded-2xl border text-center transition-all ${selectedDate === d.dateString ? 'font-bold border-transparent shadow-md' : 'bg-[#0f172a] border-slate-800 text-slate-300'}`}
+                  >
                     <span className="block text-[10px] uppercase">{d.dayName}</span>
                     <span className="block text-base font-bold my-0.5">{d.dayNumber}</span>
                     <span className="block text-[10px] uppercase">{d.monthName}</span>
@@ -713,7 +776,14 @@ export function ClientBooking() {
                     const isSelected = selectedTime === time;
 
                     return (
-                      <button key={time} type="button" disabled={isBooked} onClick={() => setSelectedTime(time)} className={`py-2.5 rounded-xl text-xs font-mono font-semibold transition-all ${isBooked ? 'bg-[#0f172a]/40 border border-slate-900 text-slate-700 line-through cursor-not-allowed' : isSelected ? `${activeTheme.primary} border-transparent shadow-md` : 'bg-[#0f172a] border border-slate-800 text-slate-300 hover:border-slate-700'}`}>
+                      <button 
+                        key={time} 
+                        type="button" 
+                        disabled={isBooked} 
+                        onClick={() => setSelectedTime(time)} 
+                        style={isSelected ? { backgroundColor: customColor, color: '#090d16' } : {}}
+                        className={`py-2.5 rounded-xl text-xs font-mono font-semibold transition-all ${isBooked ? 'bg-[#0f172a]/40 border border-slate-900 text-slate-700 line-through cursor-not-allowed' : isSelected ? 'border-transparent shadow-md' : 'bg-[#0f172a] border border-slate-800 text-slate-300 hover:border-slate-700'}`}
+                      >
                         {time}
                       </button>
                     );
@@ -726,16 +796,15 @@ export function ClientBooking() {
               <form onSubmit={handleConfirmBooking} className="space-y-4 pt-4 border-t border-slate-800">
                 <h3 className="text-sm font-semibold text-slate-300">Seus Dados</h3>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  <input type="text" required value={clientName} onChange={(e) => setClientName(e.target.value)} placeholder="Seu Nome Completo" className={`w-full bg-[#0f172a] border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none ${activeTheme.ring}`} />
-                  <input type="text" required value={clientPhone} onChange={(e) => setClientPhone(e.target.value)} placeholder="Seu WhatsApp" className={`w-full bg-[#0f172a] border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none ${activeTheme.ring}`} />
+                  <input type="text" required value={clientName} onChange={(e) => setClientName(e.target.value)} placeholder="Seu Nome Completo" className="w-full bg-[#0f172a] border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-slate-600" />
+                  <input type="text" required value={clientPhone} onChange={(e) => setClientPhone(e.target.value)} placeholder="Seu WhatsApp" className="w-full bg-[#0f172a] border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-slate-600" />
                   
-                  {/* NOVO CAMPO DE DATA DE NASCIMENTO */}
                   <div>
                     <label className="block text-[10px] text-slate-400 mb-1">Data de Nascimento (Opcional)</label>
-                    <input type="date" value={clientBirthDate} onChange={(e) => setClientBirthDate(e.target.value)} className={`w-full bg-[#0f172a] border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none ${activeTheme.ring}`} />
+                    <input type="date" value={clientBirthDate} onChange={(e) => setClientBirthDate(e.target.value)} className="w-full bg-[#0f172a] border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-slate-600" />
                   </div>
                 </div>
-                <button type="submit" disabled={loading || !selectedTime} className={`w-full font-bold py-3.5 rounded-xl text-xs disabled:opacity-50 shadow-lg transition-all ${activeTheme.primary} ${activeTheme.shadow}`}>Confirmar Agendamento</button>
+                <button type="submit" disabled={loading || !selectedTime} style={{ backgroundColor: customColor }} className="w-full font-bold py-3.5 rounded-xl text-xs text-slate-950 disabled:opacity-50 shadow-lg transition-all">Confirmar Agendamento</button>
               </form>
             )}
           </div>
@@ -743,7 +812,10 @@ export function ClientBooking() {
 
         {step === 'success' && (
           <div className="bg-[#1e293b] border border-slate-800 p-8 rounded-3xl text-center max-w-lg mx-auto space-y-6 shadow-2xl">
-            <div className={`w-16 h-16 border rounded-full flex items-center justify-center mx-auto ${activeTheme.bgSoft} ${activeTheme.border} ${activeTheme.text}`}>
+            <div 
+              style={{ borderColor: `${customColor}50`, backgroundColor: `${customColor}15`, color: customColor }}
+              className="w-16 h-16 border rounded-full flex items-center justify-center mx-auto"
+            >
               <CheckCircle2 className="w-8 h-8" />
             </div>
             <div>
@@ -752,15 +824,15 @@ export function ClientBooking() {
             </div>
 
             {tenant.pixKey ? (
-              <div className="bg-[#0f172a] border border-emerald-500/30 p-5 rounded-2xl text-left space-y-4">
+              <div style={{ borderColor: `${customColor}40` }} className="bg-[#0f172a] border p-5 rounded-2xl text-left space-y-4">
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-emerald-400">
+                  <div style={{ color: customColor }} className="flex items-center gap-2">
                     <DollarSign className="w-5 h-5" />
                     <span className="font-bold text-xs uppercase tracking-wider">
                       {tenant.requireDeposit ? `Sinal de ${tenant.depositPercent}% via PIX` : 'Pagamento via PIX'}
                     </span>
                   </div>
-                  <span className="text-sm font-mono font-bold text-emerald-400 bg-emerald-500/10 px-3 py-1 rounded-xl border border-emerald-500/20">
+                  <span style={{ color: customColor, borderColor: `${customColor}40`, backgroundColor: `${customColor}10` }} className="text-sm font-mono font-bold px-3 py-1 rounded-xl border">
                     R$ {depositAmount.toFixed(2)}
                   </span>
                 </div>
@@ -776,7 +848,8 @@ export function ClientBooking() {
                     type="text" 
                     readOnly 
                     value={tenant.pixKey} 
-                    className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs font-mono text-emerald-300 select-all" 
+                    style={{ color: customColor }}
+                    className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs font-mono select-all" 
                   />
                   <button 
                     onClick={() => {
@@ -784,7 +857,8 @@ export function ClientBooking() {
                       setPixCopied(true);
                       setTimeout(() => setPixCopied(false), 2000);
                     }}
-                    className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold px-4 py-2 rounded-xl text-xs transition-colors flex items-center gap-1.5 flex-shrink-0"
+                    style={{ backgroundColor: customColor }}
+                    className="text-slate-950 font-bold px-4 py-2 rounded-xl text-xs transition-colors flex items-center gap-1.5 flex-shrink-0"
                   >
                     {pixCopied ? <CheckCircle className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
                     {pixCopied ? 'Copiado!' : 'Copiar'}

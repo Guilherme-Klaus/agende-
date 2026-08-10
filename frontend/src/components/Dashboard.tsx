@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Building2, Calendar, Briefcase, Users, LogOut, Trash2, 
-  Clock, CheckCircle, XCircle, MessageSquare, Settings, ShieldCheck, DollarSign, UserCheck, QrCode, Copy, ExternalLink, Palette, Package, Star, TrendingDown 
+  Clock, CheckCircle, XCircle, MessageSquare, Settings, ShieldCheck, DollarSign, UserCheck, QrCode, Copy, ExternalLink, Palette, Package, Star, TrendingDown, Image as ImageIcon, BarChart3, Layers, Gift 
 } from 'lucide-react';
 
 interface UserProps {
@@ -20,8 +20,8 @@ interface DashboardProps {
 
 interface Service { id: string; name: string; duration: number; price: number; }
 interface Product { id: string; name: string; price: number; stock: number; }
-interface Professional { id: string; name: string; nickname: string; avatarUrl: string; email?: string; }
-interface Appointment { id: string; date: string; customer: { name: string; phone: string }; service: { name: string; price: number }; professional?: { id: string; name: string; nickname?: string }; professionalId?: string; whatsappLink?: string; }
+interface Professional { id: string; name: string; nickname: string; avatarUrl: string; email?: string; commission: number; }
+interface Appointment { id: string; date: string; customer: { name: string; phone: string }; service: { name: string; price: number }; professional?: { id: string; name: string; nickname?: string; commission?: number }; professionalId?: string; whatsappLink?: string; }
 interface CustomerReport { id: string; name: string; phone: string; birthDate?: string | null; totalAppointments: number; totalSpent: number; lastAppointment: string | null; }
 interface Expense { id: string; description: string; amount: number; date: string; }
 interface ReviewItem { id: string; rating: number; comment?: string; createdAt: string; appointment: { customer: { name: string }; service?: { name: string }; }; }
@@ -33,7 +33,7 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
   const isProfessional = user?.role === 'professional';
 
   const [activeTab, setActiveTab] = useState<
-    'appointments' | 'services' | 'products' | 'professionals' | 'hours' | 'profHours' | 'customers' | 'qrcode' | 'appearance' | 'settings' | 'rules' | 'expenses' | 'reviews'
+    'appointments' | 'finance' | 'servicesProducts' | 'teamHours' | 'appearancePortfolio' | 'customersReviews' | 'rulesPix' | 'qrcode'
   >('appointments');
 
   const [appointments, setAppointments] = useState<Appointment[]>([]);
@@ -44,6 +44,9 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
   const [customers, setCustomers] = useState<CustomerReport[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [reviews, setReviews] = useState<ReviewItem[]>([]);
+  const [portfolioPhotos, setPortfolioPhotos] = useState<string[]>([]);
+  const [newPortfolioUrl, setNewPortfolioUrl] = useState('');
+  const [themeColor, setThemeColor] = useState('#10b981');
 
   const [newExpenseDesc, setNewExpenseDesc] = useState('');
   const [newExpenseAmount, setNewExpenseAmount] = useState('');
@@ -64,6 +67,7 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
   const [newProfAvatar, setNewProfAvatar] = useState('');
   const [newProfEmail, setNewProfEmail] = useState('');
   const [newProfPassword, setNewProfPassword] = useState('');
+  const [newProfCommission, setNewProfCommission] = useState('50');
   
   const [logoPreview, setLogoPreview] = useState('');
   const [tenantSlug, setTenantSlug] = useState('');
@@ -103,9 +107,13 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
         if (data.logoUrl) setLogoPreview(data.logoUrl);
         if (data.slug) setTenantSlug(data.slug);
         if (data.pixKey) setTenantPixKey(data.pixKey);
+        if (data.themeColor) setThemeColor(data.themeColor);
         if (data.minNoticeHours !== undefined) setMinNoticeHours(String(data.minNoticeHours));
         if (data.requireDeposit !== undefined) setRequireDeposit(data.requireDeposit);
         if (data.depositPercent !== undefined) setDepositPercent(String(data.depositPercent));
+        if (data.portfolioPhotos) {
+          try { setPortfolioPhotos(JSON.parse(data.portfolioPhotos)); } catch { setPortfolioPhotos([]); }
+        }
       }
     } catch (err) { console.error(err); }
   }
@@ -124,6 +132,21 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
     }
   }, [selectedProfForHours]);
 
+  async function fetchServices() { try { const res = await fetch(`http://localhost:3000/services/${tenantId}`); if (res.ok) setServices(await res.json()); } catch (err) {} }
+  async function fetchProducts() { try { const res = await fetch(`http://localhost:3000/products/${tenantId}`); if (res.ok) setProducts(await res.json()); } catch (err) {} }
+  async function fetchProfessionals() { try { const res = await fetch(`http://localhost:3000/professionals/${tenantId}`); if (res.ok) setProfessionals(await res.json()); } catch (err) {} }
+  async function fetchBusinessHours() { try { const res = await fetch(`http://localhost:3000/business-hours/${tenantId}`); if (res.ok) setBusinessHours(await res.json()); } catch (err) {} }
+  async function fetchCustomers() { try { const res = await fetch(`http://localhost:3000/customers-report/${tenantId}`); if (res.ok) setCustomers(await res.json()); } catch (err) {} }
+  async function fetchExpenses() { try { const res = await fetch(`http://localhost:3000/expenses/${tenantId}`); if (res.ok) setExpenses(await res.json()); } catch (err) {} }
+  async function fetchReviews() { try { const res = await fetch(`http://localhost:3000/reviews/${tenantId}`); if (res.ok) setReviews(await res.json()); } catch (err) {} }
+
+  async function fetchProfHours(profId: string) {
+    try {
+      const res = await fetch(`http://localhost:3000/professional-hours/${profId}`);
+      if (res.ok) setProfHours(await res.json());
+    } catch (err) { console.error(err); }
+  }
+
   async function fetchAppointments() {
     if (!tenantId) return;
     try {
@@ -133,7 +156,6 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
         if (isProfessional && user?.id) {
           data = data.filter((app: any) => app.professionalId === user.id);
         }
-
         const enhancedData = data.map((app: any) => {
           if (!app.whatsappLink && app.customer) {
             const dateObj = new Date(app.date);
@@ -147,21 +169,6 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
         });
         setAppointments(enhancedData);
       }
-    } catch (err) { console.error(err); }
-  }
-
-  async function fetchServices() { try { const res = await fetch(`http://localhost:3000/services/${tenantId}`); if (res.ok) setServices(await res.json()); } catch (err) {} }
-  async function fetchProducts() { try { const res = await fetch(`http://localhost:3000/products/${tenantId}`); if (res.ok) setProducts(await res.json()); } catch (err) {} }
-  async function fetchProfessionals() { try { const res = await fetch(`http://localhost:3000/professionals/${tenantId}`); if (res.ok) setProfessionals(await res.json()); } catch (err) {} }
-  async function fetchBusinessHours() { try { const res = await fetch(`http://localhost:3000/business-hours/${tenantId}`); if (res.ok) setBusinessHours(await res.json()); } catch (err) {} }
-  async function fetchCustomers() { try { const res = await fetch(`http://localhost:3000/customers-report/${tenantId}`); if (res.ok) setCustomers(await res.json()); } catch (err) {} }
-  async function fetchExpenses() { try { const res = await fetch(`http://localhost:3000/expenses/${tenantId}`); if (res.ok) setExpenses(await res.json()); } catch (err) {} }
-  async function fetchReviews() { try { const res = await fetch(`http://localhost:3000/reviews/${tenantId}`); if (res.ok) setReviews(await res.json()); } catch (err) {} }
-
-  async function fetchProfHours(profId: string) {
-    try {
-      const res = await fetch(`http://localhost:3000/professional-hours/${profId}`);
-      if (res.ok) setProfHours(await res.json());
     } catch (err) { console.error(err); }
   }
 
@@ -245,11 +252,12 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
           avatarUrl: newProfAvatar, 
           email: newProfEmail || null,
           password: newProfPassword || null,
+          commission: Number(newProfCommission) || 50,
           tenantId 
         }),
       });
       if (res.ok) { 
-        setNewProfName(''); setNewProfNickname(''); setNewProfAvatar(''); setNewProfEmail(''); setNewProfPassword(''); fetchProfessionals(); 
+        setNewProfName(''); setNewProfNickname(''); setNewProfAvatar(''); setNewProfEmail(''); setNewProfPassword(''); setNewProfCommission('50'); fetchProfessionals(); 
       } else {
         alert('Erro ao cadastrar profissional.');
       }
@@ -262,6 +270,34 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
       const res = await fetch(`http://localhost:3000/professional/${profId}`, { method: 'DELETE' });
       if (res.ok) { fetchProfessionals(); fetchAppointments(); }
     } catch (err) { alert('Erro de conexão ao excluir.'); }
+  }
+
+  async function handleAddPortfolioPhoto(e: React.FormEvent) {
+    e.preventDefault();
+    if (!newPortfolioUrl) return;
+    const updatedPhotos = [...portfolioPhotos, newPortfolioUrl];
+    setPortfolioPhotos(updatedPhotos);
+    setNewPortfolioUrl('');
+    try {
+      await fetch(`http://localhost:3000/tenant/${tenantId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ portfolioPhotos: JSON.stringify(updatedPhotos) }),
+      });
+      alert('Foto adicionada ao portfólio!');
+    } catch (err) { alert('Erro ao salvar portfólio.'); }
+  }
+
+  async function handleDeletePortfolioPhoto(index: number) {
+    const updatedPhotos = portfolioPhotos.filter((_, i) => i !== index);
+    setPortfolioPhotos(updatedPhotos);
+    try {
+      await fetch(`http://localhost:3000/tenant/${tenantId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ portfolioPhotos: JSON.stringify(updatedPhotos) }),
+      });
+    } catch (err) {}
   }
 
   async function handleUpdateBusinessHour(hourId: string, updatedData: Partial<BusinessHour>) {
@@ -308,7 +344,6 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
         body: JSON.stringify({ pixKey: tenantPixKey }),
       });
       if (res.ok) alert('Chave PIX salva com sucesso!');
-      else alert('Erro ao salvar Chave PIX.');
     } catch (err) { alert('Erro de conexão.'); }
   }
 
@@ -320,7 +355,6 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
         body: JSON.stringify({ minNoticeHours: Number(minNoticeHours), requireDeposit, depositPercent: Number(depositPercent) }),
       });
       if (res.ok) alert('Regras de agendamento salvas com sucesso!');
-      else alert('Erro ao salvar regras.');
     } catch (err) { alert('Erro de conexão.'); }
   }
 
@@ -394,7 +428,6 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
   const totalExpenses = expenses.reduce((acc, exp) => acc + exp.amount, 0);
   const netProfit = totalRevenue - totalExpenses;
   const totalAppointmentsCount = appointments.length;
-  const averageTicket = totalAppointmentsCount > 0 ? totalRevenue / totalAppointmentsCount : 0;
 
   if (!user) return <div className="min-h-screen bg-[#0f172a] text-slate-100 flex items-center justify-center">Carregando dados...</div>;
 
@@ -417,49 +450,34 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
         </button>
       </header>
 
-      {/* Navegação por Abas (Faturamento integrado em Despesas & Caixa) */}
+      {/* Menu Superior em 8 Abas Principais */}
       <div className="border-b border-slate-800 bg-[#1e293b]/20 px-6 flex gap-4 overflow-x-auto">
         <button onClick={() => setActiveTab('appointments')} className={`py-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap ${activeTab === 'appointments' ? 'border-emerald-500 text-emerald-400' : 'border-transparent text-slate-400 hover:text-slate-200'}`}>
-          <Calendar className="w-4 h-4" /> Agendamentos Ativos ({futureAppointments.length})
+          <Calendar className="w-4 h-4" /> Agenda ({futureAppointments.length})
         </button>
 
         {!isProfessional && (
           <>
-            <button onClick={() => setActiveTab('expenses')} className={`py-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap ${activeTab === 'expenses' ? 'border-emerald-500 text-emerald-400' : 'border-transparent text-slate-400 hover:text-slate-200'}`}>
-              <TrendingDown className="w-4 h-4" /> Despesas & Caixa
+            <button onClick={() => setActiveTab('finance')} className={`py-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap ${activeTab === 'finance' ? 'border-emerald-500 text-emerald-400' : 'border-transparent text-slate-400 hover:text-slate-200'}`}>
+              <TrendingDown className="w-4 h-4" /> Financeiro & Caixa
             </button>
-            <button onClick={() => setActiveTab('reviews')} className={`py-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap ${activeTab === 'reviews' ? 'border-emerald-500 text-emerald-400' : 'border-transparent text-slate-400 hover:text-slate-200'}`}>
-              <Star className="w-4 h-4" /> Avaliações ({reviews.length})
+            <button onClick={() => setActiveTab('servicesProducts')} className={`py-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap ${activeTab === 'servicesProducts' ? 'border-emerald-500 text-emerald-400' : 'border-transparent text-slate-400 hover:text-slate-200'}`}>
+              <Briefcase className="w-4 h-4" /> Serviços & Produtos
             </button>
-            <button onClick={() => setActiveTab('services')} className={`py-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap ${activeTab === 'services' ? 'border-emerald-500 text-emerald-400' : 'border-transparent text-slate-400 hover:text-slate-200'}`}>
-              <Briefcase className="w-4 h-4" /> Serviços ({services.length})
+            <button onClick={() => setActiveTab('teamHours')} className={`py-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap ${activeTab === 'teamHours' ? 'border-emerald-500 text-emerald-400' : 'border-transparent text-slate-400 hover:text-slate-200'}`}>
+              <Users className="w-4 h-4" /> Equipe & Horários
             </button>
-            <button onClick={() => setActiveTab('products')} className={`py-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap ${activeTab === 'products' ? 'border-emerald-500 text-emerald-400' : 'border-transparent text-slate-400 hover:text-slate-200'}`}>
-              <Package className="w-4 h-4" /> Produtos / Balcão ({products.length})
+            <button onClick={() => setActiveTab('appearancePortfolio')} className={`py-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap ${activeTab === 'appearancePortfolio' ? 'border-emerald-500 text-emerald-400' : 'border-transparent text-slate-400 hover:text-slate-200'}`}>
+              <Palette className="w-4 h-4" /> Aparência & Loja
             </button>
-            <button onClick={() => setActiveTab('professionals')} className={`py-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap ${activeTab === 'professionals' ? 'border-emerald-500 text-emerald-400' : 'border-transparent text-slate-400 hover:text-slate-200'}`}>
-              <Users className="w-4 h-4" /> Profissionais ({professionals.length})
+            <button onClick={() => setActiveTab('customersReviews')} className={`py-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap ${activeTab === 'customersReviews' ? 'border-emerald-500 text-emerald-400' : 'border-transparent text-slate-400 hover:text-slate-200'}`}>
+              <UserCheck className="w-4 h-4" /> Clientes & Avaliações
             </button>
-            <button onClick={() => setActiveTab('hours')} className={`py-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap ${activeTab === 'hours' ? 'border-emerald-500 text-emerald-400' : 'border-transparent text-slate-400 hover:text-slate-200'}`}>
-              <Clock className="w-4 h-4" /> Expediente Geral
-            </button>
-            <button onClick={() => setActiveTab('profHours')} className={`py-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap ${activeTab === 'profHours' ? 'border-emerald-500 text-emerald-400' : 'border-transparent text-slate-400 hover:text-slate-200'}`}>
-              <Settings className="w-4 h-4" /> Horários por Profissional
-            </button>
-            <button onClick={() => setActiveTab('rules')} className={`py-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap ${activeTab === 'rules' ? 'border-emerald-500 text-emerald-400' : 'border-transparent text-slate-400 hover:text-slate-200'}`}>
-              <ShieldCheck className="w-4 h-4" /> Regras e Sinal PIX
-            </button>
-            <button onClick={() => setActiveTab('customers')} className={`py-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap ${activeTab === 'customers' ? 'border-emerald-500 text-emerald-400' : 'border-transparent text-slate-400 hover:text-slate-200'}`}>
-              <UserCheck className="w-4 h-4" /> Clientes (CRM)
+            <button onClick={() => setActiveTab('rulesPix')} className={`py-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap ${activeTab === 'rulesPix' ? 'border-emerald-500 text-emerald-400' : 'border-transparent text-slate-400 hover:text-slate-200'}`}>
+              <DollarSign className="w-4 h-4" /> Regras & PIX
             </button>
             <button onClick={() => setActiveTab('qrcode')} className={`py-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap ${activeTab === 'qrcode' ? 'border-emerald-500 text-emerald-400' : 'border-transparent text-slate-400 hover:text-slate-200'}`}>
-              <QrCode className="w-4 h-4" /> QR Code de Agendamento
-            </button>
-            <button onClick={() => setActiveTab('appearance')} className={`py-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap ${activeTab === 'appearance' ? 'border-emerald-500 text-emerald-400' : 'border-transparent text-slate-400 hover:text-slate-200'}`}>
-              <Palette className="w-4 h-4" /> Aparência e Cores
-            </button>
-            <button onClick={() => setActiveTab('settings')} className={`py-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap ${activeTab === 'settings' ? 'border-emerald-500 text-emerald-400' : 'border-transparent text-slate-400 hover:text-slate-200'}`}>
-              <DollarSign className="w-4 h-4" /> Chave PIX
+              <QrCode className="w-4 h-4" /> QR Code
             </button>
           </>
         )}
@@ -521,608 +539,465 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
           </div>
         )}
 
-        {/* ABA DE DESPESAS E CAIXA (Centraliza entradas, saídas e lucro líquido) */}
-        {activeTab === 'expenses' && !isProfessional && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="bg-[#1e293b] border border-slate-800 p-6 rounded-2xl h-fit space-y-4">
-              <h3 className="font-bold text-sm">Lançar Nova Despesa</h3>
-              <form onSubmit={handleCreateExpense} className="space-y-3">
-                <div>
-                  <label className="block text-xs text-slate-400 mb-1">Descrição</label>
-                  <input type="text" required value={newExpenseDesc} onChange={(e) => setNewExpenseDesc(e.target.value)} placeholder="Ex: Aluguel, Luz, Insumos" className="w-full bg-[#0f172a] border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:border-emerald-500 focus:outline-none" />
-                </div>
-                <div>
-                  <label className="block text-xs text-slate-400 mb-1">Valor (R$)</label>
-                  <input type="number" step="0.01" required value={newExpenseAmount} onChange={(e) => setNewExpenseAmount(e.target.value)} placeholder="150.00" className="w-full bg-[#0f172a] border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:border-emerald-500 focus:outline-none" />
-                </div>
-                <button type="submit" className="w-full bg-emerald-500 hover:bg-emerald-400 font-bold text-slate-950 py-2.5 rounded-xl text-xs transition-colors shadow-md shadow-emerald-500/10">Registrar Despesa</button>
-              </form>
-            </div>
-
-            <div className="md:col-span-2 space-y-4">
-              <div className="grid grid-cols-3 gap-3">
-                <div className="bg-[#1e293b] border border-slate-800 p-4 rounded-xl">
-                  <p className="text-[10px] uppercase text-slate-400">Entradas (Faturamento)</p>
-                  <p className="text-base font-bold text-emerald-400 mt-1">R$ {totalRevenue.toFixed(2)}</p>
-                </div>
-                <div className="bg-[#1e293b] border border-slate-800 p-4 rounded-xl">
-                  <p className="text-[10px] uppercase text-slate-400">Saídas (Despesas)</p>
-                  <p className="text-base font-bold text-red-400 mt-1">R$ {totalExpenses.toFixed(2)}</p>
-                </div>
-                <div className="bg-[#1e293b] border border-slate-800 p-4 rounded-xl">
-                  <p className="text-[10px] uppercase text-slate-400">Lucro Líquido</p>
-                  <p className={`text-base font-bold mt-1 ${netProfit >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>R$ {netProfit.toFixed(2)}</p>
+        {/* 1. FINANCEIRO & CAIXA */}
+        {activeTab === 'finance' && !isProfessional && (
+          <div className="space-y-8">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="bg-[#1e293b] border border-slate-800 p-5 rounded-2xl space-y-2">
+                <span className="text-xs text-slate-400 uppercase font-semibold">Total de Atendimentos</span>
+                <p className="text-2xl font-bold text-white">{totalAppointmentsCount}</p>
+                <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+                  <div className="bg-emerald-500 h-full" style={{ width: '100%' }}></div>
                 </div>
               </div>
 
-              <h3 className="font-bold text-sm">Histórico de Despesas</h3>
-              {expenses.length === 0 ? (
-                <div className="text-center py-8 bg-[#1e293b] border border-slate-800 rounded-2xl text-slate-500 text-xs">Nenhuma despesa registrada.</div>
-              ) : (
-                <div className="space-y-2">
-                  {expenses.map((exp) => (
-                    <div key={exp.id} className="bg-[#1e293b] border border-slate-800 p-4 rounded-xl flex items-center justify-between">
-                      <div>
-                        <h4 className="font-bold text-sm text-white">{exp.description}</h4>
-                        <p className="text-[10px] text-slate-400">{new Date(exp.date).toLocaleDateString('pt-BR')}</p>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <span className="font-mono font-bold text-red-400">- R$ {exp.amount.toFixed(2)}</span>
-                        <button onClick={() => handleDeleteExpense(exp.id)} className="text-red-400 hover:text-red-300 p-1.5 bg-red-500/10 rounded-lg transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
-                      </div>
-                    </div>
-                  ))}
+              <div className="bg-[#1e293b] border border-slate-800 p-5 rounded-2xl space-y-2">
+                <span className="text-xs text-slate-400 uppercase font-semibold">Entradas (Faturamento)</span>
+                <p className="text-2xl font-bold text-emerald-400">R$ {totalRevenue.toFixed(2)}</p>
+                <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+                  <div className="bg-emerald-400 h-full" style={{ width: '80%' }}></div>
                 </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* ABA DE AVALIAÇÕES */}
-        {activeTab === 'reviews' && !isProfessional && (
-          <div className="space-y-4">
-            <h2 className="text-lg font-bold">Avaliações Recebidas de Clientes Novos</h2>
-            {reviews.length === 0 ? (
-              <div className="text-center py-16 bg-[#1e293b] border border-slate-800 rounded-2xl text-slate-500 text-xs">Nenhuma avaliação recebida ainda.</div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {reviews.map((rev) => (
-                  <div key={rev.id} className="bg-[#1e293b] border border-slate-800 p-5 rounded-2xl space-y-3 shadow-md">
-                    <div className="flex items-center justify-between">
-                      <h4 className="font-bold text-white text-sm">{rev.appointment.customer?.name}</h4>
-                      <div className="flex items-center gap-1 text-amber-400 bg-amber-500/10 px-2.5 py-1 rounded-lg border border-amber-500/20">
-                        <Star className="w-3.5 h-3.5 fill-amber-400" />
-                        <span className="font-bold text-xs">{rev.rating} / 5</span>
-                      </div>
-                    </div>
-                    {rev.comment && <p className="text-xs text-slate-300 bg-[#0f172a] p-3 rounded-xl border border-slate-800">"{rev.comment}"</p>}
-                    <p className="text-[10px] text-slate-500">Serviço: {rev.appointment.service?.name || 'Atendimento'} • {new Date(rev.createdAt).toLocaleDateString('pt-BR')}</p>
-                  </div>
-                ))}
               </div>
-            )}
-          </div>
-        )}
 
-        {activeTab === 'services' && !isProfessional && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="bg-[#1e293b] border border-slate-800 p-6 rounded-2xl h-fit space-y-4">
-              <h3 className="font-bold text-sm">Novo Serviço</h3>
-              <form onSubmit={handleCreateService} className="space-y-3">
-                <div>
-                  <label className="block text-xs text-slate-400 mb-1">Nome do Serviço</label>
-                  <input type="text" required value={newServiceName} onChange={(e) => setNewServiceName(e.target.value)} className="w-full bg-[#0f172a] border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:border-emerald-500 focus:outline-none" />
+              <div className="bg-[#1e293b] border border-slate-800 p-5 rounded-2xl space-y-2">
+                <span className="text-xs text-slate-400 uppercase font-semibold">Lucro Líquido Real</span>
+                <p className={`text-2xl font-bold ${netProfit >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>R$ {netProfit.toFixed(2)}</p>
+                <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+                  <div className="bg-blue-500 h-full" style={{ width: '60%' }}></div>
                 </div>
-                <div>
-                  <label className="block text-xs text-slate-400 mb-1">Duração (minutos)</label>
-                  <input type="number" required value={newServiceDuration} onChange={(e) => setNewServiceDuration(e.target.value)} className="w-full bg-[#0f172a] border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:border-emerald-500 focus:outline-none" />
-                </div>
-                <div>
-                  <label className="block text-xs text-slate-400 mb-1">Preço (R$)</label>
-                  <input type="number" step="0.01" required value={newServicePrice} onChange={(e) => setNewServicePrice(e.target.value)} className="w-full bg-[#0f172a] border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:border-emerald-500 focus:outline-none" />
-                </div>
-                <button type="submit" className="w-full bg-emerald-500 hover:bg-emerald-400 font-bold text-slate-950 py-2.5 rounded-xl text-xs transition-colors shadow-md shadow-emerald-500/10">Adicionar Serviço</button>
-              </form>
+              </div>
             </div>
 
-            <div className="md:col-span-2 space-y-3">
-              <h3 className="font-bold text-sm">Serviços Cadastrados</h3>
-              {services.length === 0 ? (
-                <div className="text-center py-12 bg-[#1e293b] border border-slate-800 rounded-2xl text-slate-500 text-xs">Nenhum serviço cadastrado.</div>
-              ) : (
-                <div className="grid grid-cols-1 gap-3">
-                  {services.map((s) => (
-                    <div key={s.id} className="bg-[#1e293b] border border-slate-800 p-4 rounded-xl flex items-center justify-between gap-3">
-                      <div>
-                        <h4 className="font-bold text-sm text-white">{s.name}</h4>
-                        <p className="text-xs text-slate-400">R$ {s.price.toFixed(2)} • {s.duration} min</p>
-                      </div>
-                      <button onClick={() => handleDeleteService(s.id, s.name)} className="text-red-400 hover:text-red-300 p-2 bg-red-500/10 border border-red-500/20 rounded-xl transition-colors">
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="bg-[#1e293b] border border-slate-800 p-6 rounded-2xl h-fit space-y-4">
+                <h3 className="font-bold text-sm">Lançar Nova Despesa</h3>
+                <form onSubmit={handleCreateExpense} className="space-y-3">
+                  <input type="text" required value={newExpenseDesc} onChange={(e) => setNewExpenseDesc(e.target.value)} placeholder="Descrição (Ex: Aluguel)" className="w-full bg-[#0f172a] border border-slate-800 rounded-xl px-3 py-2 text-xs text-white" />
+                  <input type="number" step="0.01" required value={newExpenseAmount} onChange={(e) => setNewExpenseAmount(e.target.value)} placeholder="Valor (R$)" className="w-full bg-[#0f172a] border border-slate-800 rounded-xl px-3 py-2 text-xs text-white" />
+                  <button type="submit" className="w-full bg-emerald-500 font-bold text-slate-950 py-2.5 rounded-xl text-xs">Registrar Despesa</button>
+                </form>
+              </div>
 
-        {activeTab === 'products' && !isProfessional && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="bg-[#1e293b] border border-slate-800 p-6 rounded-2xl h-fit space-y-4">
-              <h3 className="font-bold text-sm">Novo Produto / Balcão</h3>
-              <form onSubmit={handleCreateProduct} className="space-y-3">
-                <div>
-                  <label className="block text-xs text-slate-400 mb-1">Nome do Produto</label>
-                  <input type="text" required value={newProdName} onChange={(e) => setNewProdName(e.target.value)} placeholder="Ex: Pomada Modeladora" className="w-full bg-[#0f172a] border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:border-emerald-500 focus:outline-none" />
-                </div>
-                <div>
-                  <label className="block text-xs text-slate-400 mb-1">Preço (R$)</label>
-                  <input type="number" step="0.01" required value={newProdPrice} onChange={(e) => setNewProdPrice(e.target.value)} placeholder="35.00" className="w-full bg-[#0f172a] border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:border-emerald-500 focus:outline-none" />
-                </div>
-                <div>
-                  <label className="block text-xs text-slate-400 mb-1">Estoque Inicial</label>
-                  <input type="number" required value={newProdStock} onChange={(e) => setNewProdStock(e.target.value)} className="w-full bg-[#0f172a] border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:border-emerald-500 focus:outline-none" />
-                </div>
-                <button type="submit" className="w-full bg-emerald-500 hover:bg-emerald-400 font-bold text-slate-950 py-2.5 rounded-xl text-xs transition-colors shadow-md shadow-emerald-500/10">Cadastrar Produto</button>
-              </form>
-            </div>
-
-            <div className="md:col-span-2 space-y-3">
-              <h3 className="font-bold text-sm">Produtos Cadastrados</h3>
-              {products.length === 0 ? (
-                <div className="text-center py-12 bg-[#1e293b] border border-slate-800 rounded-2xl text-slate-500 text-xs">Nenhum produto cadastrado no balcão.</div>
-              ) : (
-                <div className="grid grid-cols-1 gap-3">
-                  {products.map((p) => (
-                    <div key={p.id} className="bg-[#1e293b] border border-slate-800 p-4 rounded-xl flex items-center justify-between gap-3">
-                      <div>
-                        <h4 className="font-bold text-sm text-white">{p.name}</h4>
-                        <p className="text-xs text-slate-400">R$ {p.price.toFixed(2)} • Estoque: {p.stock} un</p>
-                      </div>
-                      <button onClick={() => handleDeleteProduct(p.id)} className="text-red-400 hover:text-red-300 p-2 bg-red-500/10 border border-red-500/20 rounded-xl transition-colors">
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {activeTab === 'professionals' && !isProfessional && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="bg-[#1e293b] border border-slate-800 p-6 rounded-2xl h-fit space-y-4">
-              <h3 className="font-bold text-sm">Novo Profissional</h3>
-              <form onSubmit={handleCreateProfessional} className="space-y-3">
-                <div>
-                  <label className="block text-xs text-slate-400 mb-1">Nome</label>
-                  <input type="text" required value={newProfName} onChange={(e) => setNewProfName(e.target.value)} className="w-full bg-[#0f172a] border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:border-emerald-500 focus:outline-none" />
-                </div>
-                <div>
-                  <label className="block text-xs text-slate-400 mb-1">Apelido / Especialidade</label>
-                  <input type="text" value={newProfNickname} onChange={(e) => setNewProfNickname(e.target.value)} className="w-full bg-[#0f172a] border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:border-emerald-500 focus:outline-none" />
-                </div>
-                <div>
-                  <label className="block text-xs text-slate-400 mb-1">E-mail para Login (Opcional)</label>
-                  <input type="email" value={newProfEmail} onChange={(e) => setNewProfEmail(e.target.value)} className="w-full bg-[#0f172a] border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:border-emerald-500 focus:outline-none" />
-                </div>
-                <div>
-                  <label className="block text-xs text-slate-400 mb-1">Senha de Acesso (Opcional)</label>
-                  <input type="password" value={newProfPassword} onChange={(e) => setNewProfPassword(e.target.value)} className="w-full bg-[#0f172a] border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:border-emerald-500 focus:outline-none" />
-                </div>
-                <button type="submit" className="w-full bg-emerald-500 hover:bg-emerald-400 font-bold text-slate-950 py-2.5 rounded-xl text-xs transition-colors shadow-md shadow-emerald-500/10">Cadastrar Profissional</button>
-              </form>
-            </div>
-
-            <div className="md:col-span-2 space-y-3">
-              <h3 className="font-bold text-sm">Equipe Cadastrada</h3>
-              {professionals.length === 0 ? (
-                <div className="text-center py-12 bg-[#1e293b] border border-slate-800 rounded-2xl text-slate-500 text-xs">Nenhum profissional cadastrado.</div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {professionals.map((p) => (
-                    <div key={p.id} className="bg-[#1e293b] border border-slate-800 p-4 rounded-xl flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-3">
-                        <img src={p.avatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80'} alt={p.name} className="w-12 h-12 rounded-full object-cover border border-slate-700" />
+              <div className="md:col-span-2 space-y-4">
+                <h3 className="font-bold text-sm">Histórico de Despesas</h3>
+                {expenses.length === 0 ? (
+                  <div className="text-center py-8 bg-[#1e293b] border border-slate-800 rounded-2xl text-slate-500 text-xs">Nenhuma despesa registrada.</div>
+                ) : (
+                  <div className="space-y-2">
+                    {expenses.map((exp) => (
+                      <div key={exp.id} className="bg-[#1e293b] border border-slate-800 p-4 rounded-xl flex items-center justify-between">
                         <div>
-                          <h4 className="font-bold text-sm text-white">{p.name}</h4>
-                          {p.nickname && <p className="text-xs text-slate-400">{p.nickname}</p>}
-                          {p.email && <p className="text-[10px] text-emerald-400 mt-0.5">Acesso liberado</p>}
+                          <h4 className="font-bold text-sm text-white">{exp.description}</h4>
+                          <p className="text-[10px] text-slate-400">{new Date(exp.date).toLocaleDateString('pt-BR')}</p>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span className="font-mono font-bold text-red-400">- R$ {exp.amount.toFixed(2)}</span>
+                          <button onClick={() => handleDeleteExpense(exp.id)} className="text-red-400 p-1.5 bg-red-500/10 rounded-lg"><Trash2 className="w-3.5 h-3.5" /></button>
                         </div>
                       </div>
-                      <button onClick={() => handleDeleteProfessional(p.id, p.name)} className="text-red-400 hover:text-red-300 p-2 bg-red-500/10 border border-red-500/20 rounded-xl transition-colors">
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {activeTab === 'rules' && !isProfessional && (
-          <div className="space-y-6 max-w-xl">
-            <div>
-              <h2 className="text-lg font-bold">Regras de Antecedência e Sinal PIX</h2>
-              <p className="text-xs text-slate-400">Configure a antecedência mínima e a exigência de sinal financeiro para os agendamentos.</p>
-            </div>
-
-            <div className="bg-[#1e293b] border border-slate-800 p-6 rounded-2xl space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-2">Antecedência Mínima (em horas)</label>
-                <input 
-                  type="number" 
-                  value={minNoticeHours} 
-                  onChange={(e) => setMinNoticeHours(e.target.value)}
-                  className="w-full bg-[#0f172a] border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-white focus:border-emerald-500 focus:outline-none font-mono" 
-                />
-                <p className="text-[10px] text-slate-500 mt-1">Impossibilita clientes de marcarem horários em cima da hora.</p>
-              </div>
-
-              <div className="border-t border-slate-800 pt-4 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <span className="text-xs font-semibold text-slate-300 block">Exigir Sinal via PIX para Confirmar?</span>
-                    <span className="text-[10px] text-slate-500">O cliente precisará pagar uma porcentagem do valor total para reservar.</span>
-                  </div>
-                  <input 
-                    type="checkbox" 
-                    checked={requireDeposit} 
-                    onChange={(e) => setRequireDeposit(e.target.checked)}
-                    className="w-4 h-4 accent-emerald-500 cursor-pointer"
-                  />
-                </div>
-
-                {requireDeposit && (
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-300 mb-2">Porcentagem do Sinal (%)</label>
-                    <input 
-                      type="number" 
-                      value={depositPercent} 
-                      onChange={(e) => setDepositPercent(e.target.value)}
-                      placeholder="Ex: 50" 
-                      className="w-full bg-[#0f172a] border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-white focus:border-emerald-500 focus:outline-none font-mono" 
-                    />
+                    ))}
                   </div>
                 )}
               </div>
-
-              <button 
-                onClick={handleSaveRules}
-                className="w-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold py-3 rounded-xl text-xs transition-colors shadow-md shadow-emerald-500/10 mt-2"
-              >
-                Salvar Regras de Agendamento
-              </button>
             </div>
-          </div>
-        )}
 
-        {activeTab === 'hours' && !isProfessional && (
-          <div className="space-y-4">
-            <div>
-              <h2 className="text-lg font-bold">Expediente Geral do Estabelecimento</h2>
-              <p className="text-xs text-slate-400">Defina os dias de funcionamento geral da empresa.</p>
-            </div>
-            <div className="space-y-3">
-              {businessHours.map((h) => (
-                <div key={h.id} className={`p-4 rounded-2xl border flex flex-col md:flex-row items-start md:items-center justify-between gap-4 ${h.isOpen ? 'bg-[#1e293b] border-slate-800' : 'bg-red-950/20 border-red-900/40'}`}>
-                  <div className="flex items-center gap-3">
-                    <button type="button" onClick={() => handleUpdateBusinessHour(h.id, { isOpen: !h.isOpen })} className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 ${h.isOpen ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30' : 'bg-red-500/10 text-red-400 border border-red-500/30'}`}>
-                      {h.isOpen ? <CheckCircle className="w-3.5 h-3.5" /> : <XCircle className="w-3.5 h-3.5" />}
-                      {h.isOpen ? 'ABERTO' : 'FECHADO'}
-                    </button>
-                    <span className="font-bold text-sm text-white">{DAYS_OF_WEEK[h.dayOfWeek]}</span>
-                  </div>
+            <div className="space-y-3 pt-6 border-t border-slate-800">
+              <h3 className="font-bold text-sm">Comissões da Equipe</h3>
+              {professionals.length === 0 ? (
+                <div className="text-center py-6 bg-[#1e293b] border border-slate-800 rounded-2xl text-slate-500 text-xs">Nenhum profissional cadastrado.</div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {professionals.map((prof) => {
+                    const profAppointments = appointments.filter(app => app.professionalId === prof.id);
+                    const profRevenue = profAppointments.reduce((sum, app) => sum + (app.service?.price || 0), 0);
+                    const commissionRate = prof.commission || 50;
+                    const commissionAmount = (profRevenue * commissionRate) / 100;
 
-                  {h.isOpen && (
-                    <div className="flex flex-wrap items-center gap-3 text-xs">
-                      <div>
-                        <span className="text-slate-500 mr-1">Abre:</span>
-                        <input type="time" value={h.openTime} onChange={(e) => handleUpdateBusinessHour(h.id, { openTime: e.target.value })} className="bg-[#0f172a] border border-slate-800 rounded-lg px-2 py-1 text-white font-mono focus:border-emerald-500 focus:outline-none" />
+                    return (
+                      <div key={prof.id} className="bg-[#1e293b] border border-slate-800 p-5 rounded-2xl space-y-2">
+                        <div className="flex items-center gap-3">
+                          <img src={prof.avatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80'} alt="" className="w-9 h-9 rounded-full object-cover border border-slate-700" />
+                          <div>
+                            <h4 className="font-bold text-white text-sm">{prof.name}</h4>
+                            <p className="text-[10px] text-slate-400">Comissão: {commissionRate}%</p>
+                          </div>
+                        </div>
+                        <div className="flex justify-between items-center bg-[#0f172a] p-3 rounded-xl border border-slate-800 text-xs">
+                          <span className="text-slate-400">Total a Repassar:</span>
+                          <span className="font-bold text-emerald-400 font-mono">R$ {commissionAmount.toFixed(2)}</span>
+                        </div>
                       </div>
-                      <div>
-                        <span className="text-slate-500 mr-1">Fecha:</span>
-                        <input type="time" value={h.closeTime} onChange={(e) => handleUpdateBusinessHour(h.id, { closeTime: e.target.value })} className="bg-[#0f172a] border border-slate-800 rounded-lg px-2 py-1 text-white font-mono focus:border-emerald-500 focus:outline-none" />
-                      </div>
-                    </div>
-                  )}
+                    );
+                  })}
                 </div>
-              ))}
+              )}
             </div>
           </div>
         )}
 
-        {activeTab === 'profHours' && !isProfessional && (
-          <div className="space-y-6">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-              <div>
-                <h2 className="text-lg font-bold">Agenda Individual de Cada Profissional</h2>
-                <p className="text-xs text-slate-400">Selecione o profissional para ajustar sua folga ou horário específico.</p>
-              </div>
-              <div className="flex gap-2 overflow-x-auto">
-                {professionals.map((prof) => (
-                  <button
-                    key={prof.id}
-                    onClick={() => setSelectedProfForHours(prof.id)}
-                    className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap ${
-                      selectedProfForHours === prof.id ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/10' : 'bg-[#1e293b] border border-slate-800 text-slate-300'
-                    }`}
-                  >
-                    <img src={prof.avatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80'} alt="" className="w-5 h-5 rounded-full object-cover" />
-                    {prof.name}
-                  </button>
+        {/* 2. SERVIÇOS & PRODUTOS */}
+        {activeTab === 'servicesProducts' && !isProfessional && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div className="space-y-4">
+              <h3 className="font-bold text-sm text-emerald-400">Gerenciar Serviços</h3>
+              <form onSubmit={handleCreateService} className="bg-[#1e293b] border border-slate-800 p-5 rounded-2xl space-y-3">
+                <input type="text" required value={newServiceName} onChange={(e) => setNewServiceName(e.target.value)} placeholder="Nome do Serviço" className="w-full bg-[#0f172a] border border-slate-800 rounded-xl px-3 py-2 text-xs text-white" />
+                <input type="number" required value={newServiceDuration} onChange={(e) => setNewServiceDuration(e.target.value)} placeholder="Duração (min)" className="w-full bg-[#0f172a] border border-slate-800 rounded-xl px-3 py-2 text-xs text-white" />
+                <input type="number" step="0.01" required value={newServicePrice} onChange={(e) => setNewServicePrice(e.target.value)} placeholder="Preço (R$)" className="w-full bg-[#0f172a] border border-slate-800 rounded-xl px-3 py-2 text-xs text-white" />
+                <button type="submit" className="w-full bg-emerald-500 font-bold text-slate-950 py-2.5 rounded-xl text-xs">Adicionar Serviço</button>
+              </form>
+              <div className="space-y-2">
+                {services.map((s) => (
+                  <div key={s.id} className="bg-[#1e293b] border border-slate-800 p-3.5 rounded-xl flex justify-between items-center text-xs">
+                    <div><span className="font-bold text-white">{s.name}</span><p className="text-slate-400">R$ {s.price.toFixed(2)} • {s.duration} min</p></div>
+                    <button onClick={() => handleDeleteService(s.id, s.name)} className="text-red-400 p-1.5"><Trash2 className="w-4 h-4" /></button>
+                  </div>
                 ))}
               </div>
             </div>
 
-            {professionals.length === 0 ? (
-              <div className="text-center py-16 bg-[#1e293b] border border-slate-800 rounded-2xl text-slate-500 text-xs">Nenhum profissional cadastrado para configurar.</div>
-            ) : (
-              <div className="space-y-3">
-                {profHours.map((h) => (
-                  <div key={h.id} className={`p-4 rounded-2xl border flex flex-col md:flex-row items-start md:items-center justify-between gap-4 ${h.isOpen ? 'bg-[#1e293b] border-slate-800' : 'bg-red-950/20 border-red-900/40'}`}>
-                    <div className="flex items-center gap-3">
-                      <button type="button" onClick={() => handleUpdateProfHour(h.id, { isOpen: !h.isOpen })} className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 ${h.isOpen ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30' : 'bg-red-500/10 text-red-400 border border-red-500/30'}`}>
-                        {h.isOpen ? <CheckCircle className="w-3.5 h-3.5" /> : <XCircle className="w-3.5 h-3.5" />}
-                        {h.isOpen ? 'TRABALHA' : 'FOLGA'}
-                      </button>
-                      <span className="font-bold text-sm text-white">{DAYS_OF_WEEK[h.dayOfWeek]}</span>
-                    </div>
+            <div className="space-y-4">
+              <h3 className="font-bold text-sm text-purple-400">Gerenciar Produtos / Balcão</h3>
+              <form onSubmit={handleCreateProduct} className="bg-[#1e293b] border border-slate-800 p-5 rounded-2xl space-y-3">
+                <input type="text" required value={newProdName} onChange={(e) => setNewProdName(e.target.value)} placeholder="Nome do Produto" className="w-full bg-[#0f172a] border border-slate-800 rounded-xl px-3 py-2 text-xs text-white" />
+                <input type="number" step="0.01" required value={newProdPrice} onChange={(e) => setNewProdPrice(e.target.value)} placeholder="Preço (R$)" className="w-full bg-[#0f172a] border border-slate-800 rounded-xl px-3 py-2 text-xs text-white" />
+                <input type="number" required value={newProdStock} onChange={(e) => setNewProdStock(e.target.value)} placeholder="Estoque Inicial" className="w-full bg-[#0f172a] border border-slate-800 rounded-xl px-3 py-2 text-xs text-white" />
+                <button type="submit" className="w-full bg-purple-600 font-bold text-white py-2.5 rounded-xl text-xs">Cadastrar Produto</button>
+              </form>
+              <div className="space-y-2">
+                {products.map((p) => (
+                  <div key={p.id} className="bg-[#1e293b] border border-slate-800 p-3.5 rounded-xl flex justify-between items-center text-xs">
+                    <div><span className="font-bold text-white">{p.name}</span><p className="text-slate-400">R$ {p.price.toFixed(2)} • Estoque: {p.stock}</p></div>
+                    <button onClick={() => handleDeleteProduct(p.id)} className="text-red-400 p-1.5"><Trash2 className="w-4 h-4" /></button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
 
+        {/* 3. EQUIPE & HORÁRIOS */}
+        {activeTab === 'teamHours' && !isProfessional && (
+          <div className="space-y-10">
+            <div className="space-y-4">
+              <h3 className="font-bold text-sm text-emerald-400">Equipe de Profissionais</h3>
+              <form onSubmit={handleCreateProfessional} className="bg-[#1e293b] border border-slate-800 p-5 rounded-2xl grid grid-cols-1 md:grid-cols-3 gap-3">
+                <input type="text" required value={newProfName} onChange={(e) => setNewProfName(e.target.value)} placeholder="Nome" className="bg-[#0f172a] border border-slate-800 rounded-xl px-3 py-2 text-xs text-white" />
+                <input type="text" value={newProfNickname} onChange={(e) => setNewProfNickname(e.target.value)} placeholder="Especialidade" className="bg-[#0f172a] border border-slate-800 rounded-xl px-3 py-2 text-xs text-white" />
+                <input type="number" value={newProfCommission} onChange={(e) => setNewProfCommission(e.target.value)} placeholder="Comissão % (ex: 50)" className="bg-[#0f172a] border border-slate-800 rounded-xl px-3 py-2 text-xs text-white" />
+                <input type="email" value={newProfEmail} onChange={(e) => setNewProfEmail(e.target.value)} placeholder="E-mail Login" className="bg-[#0f172a] border border-slate-800 rounded-xl px-3 py-2 text-xs text-white" />
+                <input type="password" value={newProfPassword} onChange={(e) => setNewProfPassword(e.target.value)} placeholder="Senha" className="bg-[#0f172a] border border-slate-800 rounded-xl px-3 py-2 text-xs text-white" />
+                <button type="submit" className="bg-emerald-500 font-bold text-slate-950 py-2 rounded-xl text-xs">Cadastrar Profissional</button>
+              </form>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {professionals.map((p) => (
+                  <div key={p.id} className="bg-[#1e293b] border border-slate-800 p-4 rounded-xl flex justify-between items-center text-xs">
+                    <div className="flex items-center gap-3">
+                      <img src={p.avatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80'} alt="" className="w-9 h-9 rounded-full object-cover border border-slate-700" />
+                      <div><span className="font-bold text-white">{p.name}</span><p className="text-slate-400">Comissão: {p.commission || 50}%</p></div>
+                    </div>
+                    <button onClick={() => handleDeleteProfessional(p.id, p.name)} className="text-red-400 p-1.5"><Trash2 className="w-4 h-4" /></button>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-4 pt-6 border-t border-slate-800">
+              <h3 className="font-bold text-sm text-blue-400">Expediente Geral da Empresa</h3>
+              <div className="space-y-2">
+                {businessHours.map((h) => (
+                  <div key={h.id} className="bg-[#1e293b] border border-slate-800 p-3.5 rounded-xl flex justify-between items-center text-xs">
+                    <div className="flex items-center gap-3">
+                      <button onClick={() => handleUpdateBusinessHour(h.id, { isOpen: !h.isOpen })} className={`px-2.5 py-1 rounded-lg font-bold ${h.isOpen ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>
+                        {h.isOpen ? 'ABERTO' : 'FECHADO'}
+                      </button>
+                      <span className="font-bold text-white">{DAYS_OF_WEEK[h.dayOfWeek]}</span>
+                    </div>
                     {h.isOpen && (
-                      <div className="flex flex-wrap items-center gap-3 text-xs">
-                        <div>
-                          <span className="text-slate-500 mr-1">Início:</span>
-                          <input type="time" value={h.openTime} onChange={(e) => handleUpdateProfHour(h.id, { openTime: e.target.value })} className="bg-[#0f172a] border border-slate-800 rounded-lg px-2 py-1 text-white font-mono focus:border-emerald-500 focus:outline-none" />
-                        </div>
-                        <div>
-                          <span className="text-slate-500 mr-1">Fim:</span>
-                          <input type="time" value={h.closeTime} onChange={(e) => handleUpdateProfHour(h.id, { closeTime: e.target.value })} className="bg-[#0f172a] border border-slate-800 rounded-lg px-2 py-1 text-white font-mono focus:border-emerald-500 focus:outline-none" />
-                        </div>
+                      <div className="flex gap-2">
+                        <input type="time" value={h.openTime} onChange={(e) => handleUpdateBusinessHour(h.id, { openTime: e.target.value })} className="bg-[#0f172a] border border-slate-800 rounded px-2 py-1 text-white font-mono" />
+                        <input type="time" value={h.closeTime} onChange={(e) => handleUpdateBusinessHour(h.id, { closeTime: e.target.value })} className="bg-[#0f172a] border border-slate-800 rounded px-2 py-1 text-white font-mono" />
                       </div>
                     )}
                   </div>
                 ))}
               </div>
-            )}
-          </div>
-        )}
+            </div>
 
-        {/* ABA CLIENTES (CRM) COM ALERTA DE ANIVERSARIANTE */}
-        {activeTab === 'customers' && !isProfessional && (
-          <div className="space-y-4">
-            <h2 className="text-lg font-bold">Base de Clientes (CRM)</h2>
-            {customers.length === 0 ? (
-              <div className="text-center py-16 bg-[#1e293b] border border-slate-800 rounded-2xl text-slate-500 text-xs">Nenhum cliente cadastrado ainda.</div>
-            ) : (
-              <div className="bg-[#1e293b] border border-slate-800 rounded-2xl overflow-hidden">
-                <table className="w-full text-left border-collapse text-xs">
-                  <thead>
-                    <tr className="border-b border-slate-800 bg-slate-900/50 text-slate-400 uppercase tracking-wider">
-                      <th className="p-4">Cliente</th>
-                      <th className="p-4">WhatsApp</th>
-                      <th className="p-4">Nascimento</th>
-                      <th className="p-4">Atendimentos</th>
-                      <th className="p-4">Total Gasto</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-800">
-                    {customers.map((c) => {
-                      let formattedBirthDate = 'Não informada';
-                      let isBirthdayToday = false;
-
-                      if (c.birthDate) {
-                        const [year, month, day] = c.birthDate.split('-');
-                        if (year && month && day) {
-                          formattedBirthDate = `${day}/${month}/${year}`;
-
-                          const today = new Date();
-                          const currentDay = String(today.getDate()).padStart(2, '0');
-                          const currentMonth = String(today.getMonth() + 1).padStart(2, '0');
-
-                          if (day === currentDay && month === currentMonth) {
-                            isBirthdayToday = true;
-                          }
-                        } else {
-                          formattedBirthDate = c.birthDate;
-                        }
-                      }
-
-                      return (
-                        <tr key={c.id} className={`hover:bg-slate-800/30 transition-colors ${isBirthdayToday ? 'bg-amber-500/10' : ''}`}>
-                          <td className="p-4 font-bold text-white flex items-center gap-2">
-                            {c.name}
-                            {isBirthdayToday && (
-                              <span className="bg-amber-500 text-slate-950 text-[10px] font-extrabold px-2 py-0.5 rounded-full animate-pulse shadow-md">
-                                🎂 ANIVERSARIANTE HOJE!
-                              </span>
-                            )}
-                          </td>
-                          <td className="p-4 text-slate-300">{c.phone}</td>
-                          <td className="p-4 text-emerald-300 font-mono">{formattedBirthDate}</td>
-                          <td className="p-4 text-slate-300">{c.totalAppointments}</td>
-                          <td className="p-4 font-mono font-bold text-emerald-400">R$ {c.totalSpent.toFixed(2)}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+            <div className="space-y-4 pt-6 border-t border-slate-800">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                  <h3 className="font-bold text-sm text-purple-400">Horários e Folgas por Profissional</h3>
+                  <p className="text-[11px] text-slate-400">Selecione o profissional para ajustar sua escala específica.</p>
+                </div>
+                <div className="flex gap-2 overflow-x-auto pb-2">
+                  {professionals.map((prof) => (
+                    <button
+                      key={prof.id}
+                      onClick={() => setSelectedProfForHours(prof.id)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap ${
+                        selectedProfForHours === prof.id ? 'bg-purple-600 text-white shadow-md' : 'bg-[#1e293b] border border-slate-800 text-slate-300'
+                      }`}
+                    >
+                      <img src={prof.avatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80'} alt="" className="w-4 h-4 rounded-full object-cover" />
+                      {prof.name}
+                    </button>
+                  ))}
+                </div>
               </div>
-            )}
+
+              {professionals.length === 0 ? (
+                <div className="text-center py-6 bg-[#1e293b] border border-slate-800 rounded-2xl text-slate-500 text-xs">Nenhum profissional cadastrado.</div>
+              ) : (
+                <div className="space-y-2">
+                  {profHours.map((h) => (
+                    <div key={h.id} className={`p-3.5 rounded-xl border flex justify-between items-center text-xs ${h.isOpen ? 'bg-[#1e293b] border-slate-800' : 'bg-red-950/20 border-red-900/40'}`}>
+                      <div className="flex items-center gap-3">
+                        <button onClick={() => handleUpdateProfHour(h.id, { isOpen: !h.isOpen })} className={`px-2.5 py-1 rounded-lg font-bold ${h.isOpen ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>
+                          {h.isOpen ? 'TRABALHA' : 'FOLGA'}
+                        </button>
+                        <span className="font-bold text-white">{DAYS_OF_WEEK[h.dayOfWeek]}</span>
+                      </div>
+                      {h.isOpen && (
+                        <div className="flex gap-2">
+                          <input type="time" value={h.openTime} onChange={(e) => handleUpdateProfHour(h.id, { openTime: e.target.value })} className="bg-[#0f172a] border border-slate-800 rounded px-2 py-1 text-white font-mono" />
+                          <input type="time" value={h.closeTime} onChange={(e) => handleUpdateProfHour(h.id, { closeTime: e.target.value })} className="bg-[#0f172a] border border-slate-800 rounded px-2 py-1 text-white font-mono" />
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         )}
 
+        {/* 4. APARÊNCIA & LOJA */}
+        {activeTab === 'appearancePortfolio' && !isProfessional && (
+          <div className="space-y-8 max-w-xl">
+            <div className="space-y-4">
+              <h3 className="font-bold text-sm">Link Personalizado (Slug)</h3>
+              <div className="bg-[#1e293b] border border-slate-800 p-5 rounded-2xl flex gap-2">
+                <input type="text" placeholder="ex: sualoja" value={tenantSlug} onChange={(e) => setTenantSlug(e.target.value)} className="w-full bg-[#0f172a] border border-slate-800 rounded-xl px-3 py-2 text-xs text-white" />
+                <button onClick={handleSaveSlug} className="bg-emerald-500 font-bold text-slate-950 px-4 py-2 rounded-xl text-xs shrink-0">Salvar</button>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <h3 className="font-bold text-sm">Logo / Foto de Perfil</h3>
+              <div className="bg-[#1e293b] border border-slate-800 p-5 rounded-2xl flex items-center gap-4">
+                {logoPreview && <img src={logoPreview} alt="" className="w-14 h-14 rounded-xl object-cover border border-slate-700" />}
+                <input type="file" accept="image/*" onChange={handleImageUpload} className="text-xs text-slate-400 file:bg-emerald-500/10 file:text-emerald-400 file:border-0 file:py-2 file:px-4 file:rounded-xl cursor-pointer" />
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <h3 className="font-bold text-sm">Cor do Tema da Página Pública (Personalizada)</h3>
+              <div className="bg-[#1e293b] border border-slate-800 p-5 rounded-2xl flex items-center gap-4">
+                <input 
+                  id="customThemeColor"
+                  type="color" 
+                  value={themeColor}
+                  onChange={async (e) => {
+                    const customColor = e.target.value;
+                    setThemeColor(customColor);
+                    if (!tenantId) return;
+                    try {
+                      const res = await fetch(`http://localhost:3000/tenant/${tenantId}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ themeColor: customColor }),
+                      });
+                      if (!res.ok) alert('Erro ao salvar a cor no servidor.');
+                    } catch (err) { 
+                      console.error(err); 
+                    }
+                  }}
+                  className="w-12 h-12 rounded-xl bg-transparent cursor-pointer border border-slate-700"
+                />
+                <div>
+                  <p className="font-bold text-xs text-white">Escolha qualquer cor ({themeColor})</p>
+                  <p className="text-[10px] text-slate-400">A cor é salva automaticamente ao selecionar na paleta.</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <h3 className="font-bold text-sm">Portfólio de Fotos (Galeria Pública)</h3>
+              <form onSubmit={handleAddPortfolioPhoto} className="bg-[#1e293b] border border-slate-800 p-5 rounded-2xl space-y-3">
+                <input type="url" required placeholder="https://exemplo.com/foto.jpg" value={newPortfolioUrl} onChange={(e) => setNewPortfolioUrl(e.target.value)} className="w-full bg-[#0f172a] border border-slate-800 rounded-xl px-3 py-2 text-xs text-white" />
+                <button type="submit" className="w-full bg-emerald-500 font-bold text-slate-950 py-2.5 rounded-xl text-xs">Adicionar Foto</button>
+              </form>
+              <div className="grid grid-cols-3 gap-3">
+                {portfolioPhotos.map((photo, index) => (
+                  <div key={index} className="relative group rounded-xl overflow-hidden border border-slate-800 aspect-square bg-[#1e293b]">
+                    <img src={photo} alt="" className="w-full h-full object-cover" />
+                    <button onClick={() => handleDeletePortfolioPhoto(index)} className="absolute top-1 right-1 bg-red-500 text-white p-1 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 className="w-3 h-3" /></button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 5. CLIENTES & AVALIAÇÕES (CRM + Aniversariantes + Avaliações) */}
+        {activeTab === 'customersReviews' && !isProfessional && (
+          <div className="space-y-8">
+            {/* Seção de Aniversariantes do Mês */}
+            <div className="bg-[#1e293b] border border-slate-800 p-6 rounded-2xl space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="bg-pink-500/10 p-2.5 rounded-xl border border-pink-500/30 text-pink-400">
+                  <Gift className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm text-white">Aniversariantes do Mês</h3>
+                  <p className="text-xs text-slate-400">Clientes cadastrados que fazem aniversário neste mês.</p>
+                </div>
+              </div>
+
+              {customers.filter(c => {
+                if (!c.birthDate) return false;
+                const bDate = new Date(c.birthDate);
+                const currentMonth = new Date().getMonth();
+                return bDate.getMonth() === currentMonth;
+              }).length === 0 ? (
+                <div className="text-center py-6 bg-[#0f172a] border border-slate-800 rounded-xl text-slate-500 text-xs">Nenhum aniversariante neste mês.</div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {customers.filter(c => {
+                    if (!c.birthDate) return false;
+                    const bDate = new Date(c.birthDate);
+                    const currentMonth = new Date().getMonth();
+                    return bDate.getMonth() === currentMonth;
+                  }).map(c => {
+                    const bDate = new Date(c.birthDate!);
+                    const cleanPhone = c.phone.replace(/\D/g, '');
+                    const msg = encodeURIComponent(`Olá ${c.name}! Passando para te desejar um feliz aniversário! Muitas felicidades e sucesso, e conte sempre conosco da ${user.tenantName}! 🎂🎉`);
+                    const waLink = `https://api.whatsapp.com/send?phone=55${cleanPhone}&text=${msg}`;
+
+                    return (
+                      <div key={c.id} className="bg-[#0f172a] border border-slate-800 p-4 rounded-xl flex items-center justify-between text-xs">
+                        <div>
+                          <span className="font-bold text-white block">{c.name}</span>
+                          <span className="text-slate-400">🎂 Dia {String(bDate.getUTCDate()).padStart(2, '0')}/{String(bDate.getUTCMonth() + 1).padStart(2, '0')}</span>
+                        </div>
+                        <a href={waLink} target="_blank" rel="noopener noreferrer" className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold px-3 py-2 rounded-xl flex items-center gap-1.5 transition-colors shadow-sm">
+                          <MessageSquare className="w-3.5 h-3.5" /> Parabéns
+                        </a>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Base de Clientes (CRM) */}
+            <div className="space-y-4">
+              <h3 className="font-bold text-sm">Base de Clientes (CRM)</h3>
+              {customers.length === 0 ? (
+                <div className="text-center py-8 bg-[#1e293b] border border-slate-800 rounded-2xl text-slate-500 text-xs">Nenhum cliente cadastrado.</div>
+              ) : (
+                <div className="bg-[#1e293b] border border-slate-800 rounded-2xl overflow-hidden">
+                  <table className="w-full text-left text-xs">
+                    <thead className="border-b border-slate-800 bg-slate-900/50 text-slate-400 uppercase">
+                      <tr><th className="p-3">Cliente</th><th className="p-3">WhatsApp</th><th className="p-3">Nascimento</th><th className="p-3">Atendimentos</th><th className="p-3">Total Gasto</th></tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800">
+                      {customers.map((c) => (
+                        <tr key={c.id} className="hover:bg-slate-800/30">
+                          <td className="p-3 font-bold text-white">{c.name}</td>
+                          <td className="p-3 text-slate-300">{c.phone}</td>
+                          <td className="p-3 text-slate-300">{c.birthDate ? new Date(c.birthDate).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : '-'}</td>
+                          <td className="p-3 text-slate-300">{c.totalAppointments}</td>
+                          <td className="p-3 font-mono font-bold text-emerald-400">R$ {c.totalSpent.toFixed(2)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            {/* Avaliações Recebidas */}
+            <div className="space-y-4 pt-4 border-t border-slate-800">
+              <h3 className="font-bold text-sm">Avaliações Recebidas ({reviews.length})</h3>
+              {reviews.length === 0 ? (
+                <div className="text-center py-8 bg-[#1e293b] border border-slate-800 rounded-2xl text-slate-500 text-xs">Nenhuma avaliação recebida.</div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {reviews.map((rev) => (
+                    <div key={rev.id} className="bg-[#1e293b] border border-slate-800 p-4 rounded-xl space-y-2 text-xs">
+                      <div className="flex justify-between items-center"><span className="font-bold text-white">{rev.appointment.customer?.name}</span><span className="text-amber-400 font-bold">★ {rev.rating}/5</span></div>
+                      {rev.comment && <p className="text-slate-300 bg-[#0f172a] p-2.5 rounded-lg">"{rev.comment}"</p>}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* 6. REGRAS & PIX */}
+        {activeTab === 'rulesPix' && !isProfessional && (
+          <div className="space-y-6 max-w-xl">
+            <div className="bg-[#1e293b] border border-slate-800 p-6 rounded-2xl space-y-4">
+              <h3 className="font-bold text-sm">Chave PIX</h3>
+              <input type="text" placeholder="Sua Chave PIX" value={tenantPixKey} onChange={(e) => setTenantPixKey(e.target.value)} className="w-full bg-[#0f172a] border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-white" />
+              <button onClick={handleSavePixKey} className="w-full bg-emerald-500 font-bold text-slate-950 py-2.5 rounded-xl text-xs">Salvar Chave PIX</button>
+            </div>
+
+            <div className="bg-[#1e293b] border border-slate-800 p-6 rounded-2xl space-y-4">
+              <h3 className="font-bold text-sm">Regras de Antecedência e Sinal</h3>
+              <div>
+                <label className="block text-xs text-slate-400 mb-1">Antecedência Mínima (horas)</label>
+                <input type="number" value={minNoticeHours} onChange={(e) => setMinNoticeHours(e.target.value)} className="w-full bg-[#0f172a] border border-slate-800 rounded-xl px-3 py-2 text-xs text-white font-mono" />
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-slate-300">Exigir Sinal via PIX?</span>
+                <input type="checkbox" checked={requireDeposit} onChange={(e) => setRequireDeposit(e.target.checked)} className="w-4 h-4 accent-emerald-500" />
+              </div>
+              {requireDeposit && (
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1">Porcentagem do Sinal (%)</label>
+                  <input type="number" value={depositPercent} onChange={(e) => setDepositPercent(e.target.value)} className="w-full bg-[#0f172a] border border-slate-800 rounded-xl px-3 py-2 text-xs text-white font-mono" />
+                </div>
+              )}
+              <button onClick={handleSaveRules} className="w-full bg-emerald-500 font-bold text-slate-950 py-2.5 rounded-xl text-xs">Salvar Regras</button>
+            </div>
+          </div>
+        )}
+
+        {/* 7. QR CODE */}
         {activeTab === 'qrcode' && !isProfessional && (
           <div className="space-y-6 max-w-xl mx-auto text-center">
             <div>
-              <h2 className="text-xl font-bold text-white">QR Code para o Balcão / Recepção</h2>
-              <p className="text-xs text-slate-400 mt-1">Imprima este QR Code e coloque em um display no seu estabelecimento para seus clientes escanearem e agendarem na hora!</p>
+              <h2 className="text-xl font-bold">QR Code de Agendamento</h2>
+              <p className="text-xs text-slate-400 mt-1">Imprima ou compartilhe este QR Code para seus clientes escanearem e agendarem diretamente.</p>
             </div>
-
-            <div className="bg-[#1e293b] border border-slate-800 p-8 rounded-3xl shadow-2xl space-y-6 flex flex-col items-center">
-              <div className="bg-white p-4 rounded-2xl shadow-inner">
-                <img 
-                  src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(bookingUrl)}`} 
-                  alt="QR Code de Agendamento" 
-                  className="w-56 h-56 object-contain"
-                />
+            
+            <div className="bg-[#1e293b] border border-slate-800 p-8 rounded-3xl space-y-6 flex flex-col items-center shadow-xl">
+              <div className="bg-white p-4 rounded-2xl shadow-md">
+                <img src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(bookingUrl)}`} alt="QR Code" className="w-56 h-56 object-contain" />
               </div>
 
               <div className="w-full space-y-3">
-                <div className="flex items-center gap-2 bg-[#0f172a] border border-slate-800 p-3 rounded-xl">
-                  <input 
-                    type="text" 
-                    readOnly 
-                    value={bookingUrl} 
-                    className="w-full bg-transparent text-xs text-slate-300 focus:outline-none font-mono"
-                  />
-                  <button 
-                    onClick={handleCopyLink}
-                    className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold px-3 py-2 rounded-lg text-xs transition-colors flex items-center gap-1.5 shrink-0"
-                  >
-                    <Copy className="w-3.5 h-3.5" /> {copied ? 'Copiado!' : 'Copiar'}
+                <div className="bg-[#0f172a] border border-slate-800 p-3 rounded-xl flex items-center justify-between">
+                  <span className="text-[11px] text-slate-400 truncate max-w-[280px] font-mono">{bookingUrl}</span>
+                  <button onClick={handleCopyLink} className="bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors">
+                    {copied ? <CheckCircle className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                    {copied ? 'Copiado!' : 'Copiar'}
                   </button>
                 </div>
 
                 <a 
                   href={bookingUrl} 
                   target="_blank" 
-                  rel="noopener noreferrer"
-                  className="block w-full bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold py-3 rounded-xl text-xs transition-colors flex items-center justify-center gap-2"
+                  rel="noopener noreferrer" 
+                  className="w-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold py-3 rounded-xl text-xs flex items-center justify-center gap-2 transition-colors shadow-md shadow-emerald-500/10"
                 >
-                  <ExternalLink className="w-4 h-4" /> Abrir Página de Agendamento em Nova Aba
+                  <ExternalLink className="w-4 h-4" /> Abrir Página Pública de Agendamento
                 </a>
               </div>
-            </div>
-          </div>
-        )}
-
-        {activeTab === 'appearance' && !isProfessional && (
-          <div className="space-y-8 max-w-xl">
-            <div className="space-y-4">
-              <div>
-                <h2 className="text-lg font-bold">Link Personalizado (Slug)</h2>
-                <p className="text-xs text-slate-400">Defina um nome limpo para o seu link de agendamento (ex: psicologanathi).</p>
-              </div>
-
-              <div className="bg-[#1e293b] border border-slate-800 p-5 rounded-2xl space-y-3">
-                <label className="block text-xs text-slate-400">Seu Link Exclusivo</label>
-                <div className="flex gap-2">
-                  <input 
-                    type="text" 
-                    placeholder="ex: psicologanathi" 
-                    value={tenantSlug} 
-                    onChange={(e) => setTenantSlug(e.target.value)}
-                    className="w-full bg-[#0f172a] border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none" 
-                  />
-                  <button 
-                    onClick={handleSaveSlug}
-                    className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold px-4 py-2 rounded-xl text-xs transition-colors shrink-0"
-                  >
-                    Salvar Link
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <h2 className="text-lg font-bold">Foto de Perfil / Logo do Estabelecimento</h2>
-                <p className="text-xs text-slate-400">Faça upload de uma imagem do seu computador para usar como foto de perfil.</p>
-              </div>
-
-              <div className="bg-[#1e293b] border border-slate-800 p-6 rounded-2xl flex items-center gap-6">
-                <div className="w-20 h-20 rounded-2xl border border-slate-700 overflow-hidden bg-[#0f172a] flex items-center justify-center shrink-0">
-                  {logoPreview ? (
-                    <img src={logoPreview} alt="Logo Preview" className="w-full h-full object-cover" />
-                  ) : (
-                    <Building2 className="w-8 h-8 text-slate-500" />
-                  )}
-                </div>
-
-                <div className="space-y-2 flex-1">
-                  <label className="block text-xs font-semibold text-slate-300">Selecionar imagem do computador</label>
-                  <input 
-                    type="file" 
-                    accept="image/*"
-                    onChange={handleImageUpload}
-                    className="block w-full text-xs text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-emerald-500/10 file:text-emerald-400 hover:file:bg-emerald-500/20 cursor-pointer" 
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <h2 className="text-lg font-bold">Personalização do Tema Visual</h2>
-                <p className="text-xs text-slate-400">Escolha a cor principal que aparecerá na sua página de agendamento público.</p>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                {[
-                  { id: 'emerald', name: 'Verde Neon (Padrão)', color: 'bg-emerald-500' },
-                  { id: 'blue', name: 'Azul Elétrico', color: 'bg-blue-600' },
-                  { id: 'purple', name: 'Roxo Neon', color: 'bg-purple-600' },
-                  { id: 'pink', name: 'Rosa Estúdio', color: 'bg-pink-600' },
-                ].map((theme) => (
-                  <button
-                    key={theme.id}
-                    onClick={async () => {
-                      try {
-                        const res = await fetch(`http://localhost:3000/tenant/${tenantId}`, {
-                          method: 'PUT',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ themeColor: theme.id }),
-                        });
-                        if (res.ok) {
-                          alert('Tema atualizado com sucesso!');
-                        }
-                      } catch (err) {
-                        alert('Erro ao atualizar tema.');
-                      }
-                    }}
-                    className="bg-[#1e293b] border border-slate-800 p-5 rounded-2xl flex items-center gap-4 hover:border-emerald-500/50 transition-all text-left"
-                  >
-                    <div className={`w-8 h-8 rounded-full ${theme.color} shadow-md`}></div>
-                    <div>
-                      <p className="font-bold text-xs text-white">{theme.name}</p>
-                      <p className="text-[10px] text-slate-400 mt-0.5">Aplicar este estilo</p>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {activeTab === 'settings' && !isProfessional && (
-          <div className="space-y-6 max-w-xl">
-            <div>
-              <h2 className="text-lg font-bold">Configuração de Chave PIX</h2>
-              <p className="text-xs text-slate-400">Informe sua chave PIX para que ela apareça na tela de sucesso quando o cliente realizar um agendamento.</p>
-            </div>
-
-            <div className="bg-[#1e293b] border border-slate-800 p-6 rounded-2xl space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-2">Sua Chave PIX (CPF, CNPJ, E-mail, Telefone ou Aleatória)</label>
-                <input 
-                  type="text" 
-                  placeholder="Ex: 11999999999 ou meu@email.com" 
-                  value={tenantPixKey} 
-                  onChange={(e) => setTenantPixKey(e.target.value)}
-                  className="w-full bg-[#0f172a] border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-white focus:border-emerald-500 focus:outline-none font-mono" 
-                />
-              </div>
-              <button 
-                onClick={handleSavePixKey}
-                className="w-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold py-3 rounded-xl text-xs transition-colors shadow-md shadow-emerald-500/10"
-              >
-                Salvar Chave PIX
-              </button>
             </div>
           </div>
         )}

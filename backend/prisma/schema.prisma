@@ -24,6 +24,7 @@ model Tenant {
   minNoticeHours  Int             @default(2)     
   requireDeposit  Boolean         @default(false) 
   depositPercent  Int             @default(50)    
+  portfolioPhotos String?         // Novo: Armazena as fotos do portfólio (separadas por vírgula ou JSON)
 
   users           User[]
   services        Service[]
@@ -41,7 +42,7 @@ model User {
   email     String   @unique
   password  String
   tenantId  String
-  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
 }
 
@@ -51,7 +52,7 @@ model Service {
   duration     Int
   price        Float
   tenantId     String
-  tenant       Tenant        @relation(fields: [tenantId], references: [id])
+  tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   appointments Appointment[]
 }
 
@@ -61,7 +62,7 @@ model Product {
   price       Float
   stock       Int      @default(0)
   tenantId    String
-  tenant      Tenant   @relation(fields: [tenantId], references: [id])
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 }
 
 model Professional {
@@ -71,8 +72,9 @@ model Professional {
   avatarUrl    String?
   email        String?            @unique
   password     String?
+  commission   Float              @default(50.0) // Novo: Porcentagem de comissão do profissional (ex: 50%)
   tenantId     String
-  tenant       Tenant             @relation(fields: [tenantId], references: [id])
+  tenant       Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   appointments Appointment[]
   hours        ProfessionalHour[]
 }
@@ -83,7 +85,7 @@ model Customer {
   phone        String
   birthDate    String?       
   tenantId     String
-  tenant       Tenant        @relation(fields: [tenantId], references: [id])
+  tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   appointments Appointment[]
 }
 
@@ -91,13 +93,13 @@ model Appointment {
   id             String        @id @default(uuid())
   date           DateTime
   tenantId       String
-  tenant         Tenant        @relation(fields: [tenantId], references: [id])
+  tenant         Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   customerId     String
-  customer       Customer      @relation(fields: [customerId], references: [id])
+  customer       Customer      @relation(fields: [customerId], references: [id], onDelete: Cascade)
   serviceId      String?
-  service        Service?      @relation(fields: [serviceId], references: [id])
+  service        Service?      @relation(fields: [serviceId], references: [id], onDelete: SetNull)
   professionalId String?
-  professional   Professional? @relation(fields: [professionalId], references: [id])
+  professional   Professional? @relation(fields: [professionalId], references: [id], onDelete: SetNull)
   review         Review?       
   createdAt      DateTime      @default(now())
 }
@@ -117,7 +119,7 @@ model Expense {
   amount      Float    
   date        DateTime @default(now())
   tenantId    String
-  tenant      Tenant   @relation(fields: [tenantId], references: [id])
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 }
 
 model BusinessHour {
@@ -129,7 +131,7 @@ model BusinessHour {
   lunchStart String   @default("12:00")
   lunchEnd   String   @default("13:00")
   tenantId   String
-  tenant     Tenant   @relation(fields: [tenantId], references: [id])
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 }
 
 model ProfessionalHour {
@@ -141,5 +143,5 @@ model ProfessionalHour {
   lunchStart     String       @default("12:00")
   lunchEnd       String       @default("13:00")
   professionalId String
-  professional   Professional @relation(fields: [professionalId], references: [id])
+  professional   Professional @relation(fields: [professionalId], references: [id], onDelete: Cascade)
 }
