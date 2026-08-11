@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Building2, ShieldAlert, LogOut, Copy, Check, Trash2, Lock, Unlock, Search, Calendar, DollarSign, Users, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Building2, ShieldAlert, LogOut, Copy, Check, Trash2, Lock, Unlock, Search, Calendar, DollarSign, Users, AlertCircle, CheckCircle2, Award } from 'lucide-react';
 
 interface Tenant {
   id: string;
@@ -9,6 +9,7 @@ interface Tenant {
   createdAt: string;
   isActive: boolean;
   dueDate?: string;
+  plan?: string;
   users?: { id: string; email: string }[];
 }
 
@@ -54,6 +55,24 @@ export function SuperAdmin({ onLogout }: SuperAdminProps) {
       }
     } catch (err) {
       alert('Erro de conexão ao alterar status.');
+    }
+  }
+
+  async function handleChangePlan(tenantId: string, newPlan: string) {
+    try {
+      const res = await fetch(`http://localhost:3000/admin/update-tenant-plan/${tenantId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plan: newPlan }),
+      });
+
+      if (res.ok) {
+        fetchTenants();
+      } else {
+        alert('Erro ao atualizar plano.');
+      }
+    } catch (err) {
+      alert('Erro de conexão.');
     }
   }
 
@@ -133,12 +152,15 @@ export function SuperAdmin({ onLogout }: SuperAdminProps) {
     return matchesSearch;
   });
 
-  // Métricas para os Cards do Topo
   const totalTenantsCount = tenants.length;
   const activeTenantsCount = tenants.filter(t => t.isActive).length;
   const blockedTenantsCount = totalTenantsCount - activeTenantsCount;
-  // Exemplo de cálculo de MRR baseado em R$ 99 por tenant ativo (você pode ajustar depois)
-  const estimatedMRR = activeTenantsCount * 99;
+  
+  // Cálculo MRR dinâmico baseado no plano selecionado de cada tenant ativo
+  const estimatedMRR = tenants.reduce((sum, t) => {
+    if (!t.isActive) return sum;
+    return sum + (t.plan === 'profissional' ? 119 : 79);
+  }, 0);
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col">
@@ -149,7 +171,7 @@ export function SuperAdmin({ onLogout }: SuperAdminProps) {
           </div>
           <div>
             <h1 className="text-xl font-bold text-amber-500">Painel Master — Agende+</h1>
-            <p className="text-xs text-zinc-400">Gerenciamento de Assinaturas e Acessos</p>
+            <p className="text-xs text-zinc-400">Gerenciamento de Assinaturas e Planos</p>
           </div>
         </div>
         <button
@@ -162,7 +184,7 @@ export function SuperAdmin({ onLogout }: SuperAdminProps) {
 
       <main className="flex-1 p-6 max-w-6xl mx-auto w-full space-y-8">
         
-        {/* CARDS DE MÉTRICAS E PAGAMENTOS (SAAS OVERVIEW) */}
+        {/* CARDS DE MÉTRICAS */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="bg-zinc-900 border border-zinc-800 p-5 rounded-2xl space-y-2 shadow-sm">
             <div className="flex items-center justify-between text-zinc-400">
@@ -193,11 +215,11 @@ export function SuperAdmin({ onLogout }: SuperAdminProps) {
 
           <div className="bg-zinc-900 border border-zinc-800 p-5 rounded-2xl space-y-2 shadow-sm">
             <div className="flex items-center justify-between text-zinc-400">
-              <span className="text-xs uppercase font-semibold">MRR (Receita Estimada)</span>
+              <span className="text-xs uppercase font-semibold">MRR (Receita Mensal)</span>
               <DollarSign className="w-4 h-4 text-amber-500" />
             </div>
             <p className="text-2xl font-bold text-amber-500 font-mono">R$ {estimatedMRR.toFixed(2)}</p>
-            <p className="text-[10px] text-zinc-500">Baseado em contas ativas</p>
+            <p className="text-[10px] text-zinc-500">Baseado nos planos ativos</p>
           </div>
         </div>
 
@@ -265,14 +287,25 @@ export function SuperAdmin({ onLogout }: SuperAdminProps) {
                       </button>
                     </div>
 
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] bg-amber-500/10 border border-amber-500/20 text-amber-400 px-2.5 py-1 rounded-md font-medium uppercase tracking-wider inline-block">
-                        {tenant.category || 'Geral'}
-                      </span>
+                    <div className="flex items-center justify-between pt-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] bg-amber-500/10 border border-amber-500/20 text-amber-400 px-2.5 py-1 rounded-md font-medium uppercase tracking-wider">
+                          {tenant.category || 'Geral'}
+                        </span>
+                        
+                        {/* Seletor de Plano pelo Super Admin */}
+                        <select
+                          value={tenant.plan || 'essencial'}
+                          onChange={(e) => handleChangePlan(tenant.id, e.target.value)}
+                          className="bg-zinc-950 border border-zinc-800 text-amber-400 rounded-lg px-2 py-1 text-[11px] font-bold uppercase focus:outline-none focus:border-amber-500"
+                        >
+                          <option value="essencial">Plano Essencial (R$ 79)</option>
+                          <option value="profissional">Plano Profissional (R$ 119)</option>
+                        </select>
+                      </div>
                       
                       <div className="flex items-center gap-1.5 text-xs text-zinc-400">
                         <Calendar className="w-3.5 h-3.5 text-amber-500" />
-                        <span>Vencimento:</span>
                         <input
                           type="date"
                           defaultValue={tenant.dueDate ? tenant.dueDate.split('T')[0] : ''}

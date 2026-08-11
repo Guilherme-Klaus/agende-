@@ -58,9 +58,23 @@ app.put('/admin/update-tenant-due-date/:tenantId', async (req: Request, res: Res
   }
 });
 
+app.put('/admin/update-tenant-plan/:tenantId', async (req: Request, res: Response) => {
+  try {
+    const { tenantId } = req.params;
+    const { plan } = req.body;
+    const updatedTenant = await prisma.tenant.update({
+      where: { id: tenantId },
+      data: { plan: plan || 'essencial' },
+    });
+    return res.status(200).json({ message: 'Plano alterado com sucesso!', tenant: updatedTenant });
+  } catch (error) {
+    return res.status(400).json({ error: 'Erro ao alterar o plano da empresa.' });
+  }
+});
+
 app.post('/tenant', async (req: Request, res: Response) => {
   try {
-    const { name, category, whatsapp, address, closingHour, themeColor, logoUrl, slug, pixKey, minNoticeHours, requireDeposit, depositPercent } = req.body;
+    const { name, category, whatsapp, address, closingHour, themeColor, logoUrl, slug, pixKey, minNoticeHours, requireDeposit, depositPercent, plan } = req.body;
     
     const generatedSlug = slug 
       ? slug.toLowerCase().replace(/[^a-z0-9]/g, '-') 
@@ -77,6 +91,7 @@ app.post('/tenant', async (req: Request, res: Response) => {
         themeColor: themeColor || 'emerald',
         logoUrl: logoUrl || null,
         pixKey: pixKey || null,
+        plan: plan || 'essencial',
         minNoticeHours: minNoticeHours !== undefined ? Number(minNoticeHours) : 2,
         requireDeposit: requireDeposit !== undefined ? Boolean(requireDeposit) : false,
         depositPercent: depositPercent !== undefined ? Number(depositPercent) : 50,
@@ -134,7 +149,7 @@ app.get('/tenant/:identifier', async (req: Request, res: Response) => {
 app.put('/tenant/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { name, category, whatsapp, address, themeColor, logoUrl, slug, pixKey, minNoticeHours, requireDeposit, depositPercent, closingHour, portfolioPhotos } = req.body;
+    const { name, category, whatsapp, address, themeColor, logoUrl, slug, pixKey, minNoticeHours, requireDeposit, depositPercent, closingHour, portfolioPhotos, plan } = req.body;
     
     const existing = await prisma.tenant.findUnique({ where: { id } });
     if (!existing) return res.status(404).json({ error: 'Estabelecimento não encontrado.' });
@@ -151,6 +166,7 @@ app.put('/tenant/:id', async (req: Request, res: Response) => {
         themeColor: themeColor !== undefined ? themeColor : existing.themeColor,
         logoUrl: logoUrl !== undefined ? logoUrl : existing.logoUrl,
         pixKey: pixKey !== undefined ? pixKey : existing.pixKey,
+        plan: plan !== undefined ? plan : existing.plan,
         minNoticeHours: minNoticeHours !== undefined ? Number(minNoticeHours) : existing.minNoticeHours,
         requireDeposit: requireDeposit !== undefined ? Boolean(requireDeposit) : existing.requireDeposit,
         depositPercent: depositPercent !== undefined ? Number(depositPercent) : existing.depositPercent,

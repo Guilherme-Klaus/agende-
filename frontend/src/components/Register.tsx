@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Store, UserPlus, LogIn } from 'lucide-react';
+import { Store, UserPlus, LogIn, Check, Sparkles } from 'lucide-react';
 
 interface RegisterProps {
   onRegisterSuccess: () => void;
@@ -15,6 +15,7 @@ export function Register({ onRegisterSuccess, onSwitchToLogin }: RegisterProps) 
   const [adminName, setAdminName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [selectedPlan, setSelectedPlan] = useState<'essencial' | 'profissional'>('profissional');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -27,7 +28,7 @@ export function Register({ onRegisterSuccess, onSwitchToLogin }: RegisterProps) 
       const tenantRes = await fetch('http://localhost:3000/tenant', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, category, whatsapp, address, closingHour }),
+        body: JSON.stringify({ name, category, whatsapp, address, closingHour, plan: selectedPlan }),
       });
 
       const tenantData = await tenantRes.json();
@@ -65,7 +66,7 @@ export function Register({ onRegisterSuccess, onSwitchToLogin }: RegisterProps) 
 
   return (
     <div className="min-h-screen bg-[#0f172a] flex items-center justify-center p-4">
-      <div className="bg-[#1e293b]/80 backdrop-blur-xl border border-slate-700/60 p-8 rounded-3xl w-full max-w-lg shadow-2xl text-slate-100">
+      <div className="bg-[#1e293b]/80 backdrop-blur-xl border border-slate-700/60 p-8 rounded-3xl w-full max-w-xl shadow-2xl text-slate-100">
         <div className="flex items-center gap-3.5 mb-6">
           <div className="bg-emerald-500/10 p-3 rounded-2xl border border-emerald-500/30">
             <Store className="w-8 h-8 text-emerald-400" />
@@ -83,6 +84,40 @@ export function Register({ onRegisterSuccess, onSwitchToLogin }: RegisterProps) 
         )}
 
         <form onSubmit={handleRegister} className="space-y-4">
+          
+          {/* SELEÇÃO DE PLANOS */}
+          <div className="space-y-2">
+            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400">Escolha o seu Plano</label>
+            <div className="grid grid-cols-2 gap-3">
+              <div 
+                onClick={() => setSelectedPlan('essencial')}
+                className={`p-4 rounded-2xl border cursor-pointer transition-all flex flex-col justify-between ${selectedPlan === 'essencial' ? 'bg-emerald-500/10 border-emerald-500 text-white' : 'bg-[#0f172a] border-slate-700 text-slate-400'}`}
+              >
+                <div>
+                  <span className="text-[10px] font-bold uppercase tracking-wider block text-emerald-400">Essencial</span>
+                  <p className="text-lg font-black text-white mt-1">R$ 79<span className="text-[10px] font-normal">/mês</span></p>
+                </div>
+                <div className="mt-3 flex items-center gap-1 text-[11px]">
+                  <Check className={`w-3.5 h-3.5 ${selectedPlan === 'essencial' ? 'text-emerald-400' : 'text-slate-600'}`} /> Autônomos
+                </div>
+              </div>
+
+              <div 
+                onClick={() => setSelectedPlan('profissional')}
+                className={`p-4 rounded-2xl border cursor-pointer transition-all flex flex-col justify-between relative ${selectedPlan === 'profissional' ? 'bg-emerald-500/10 border-emerald-500 text-white' : 'bg-[#0f172a] border-slate-700 text-slate-400'}`}
+              >
+                <span className="absolute -top-2.5 right-3 bg-emerald-500 text-slate-950 text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-full">Popular</span>
+                <div>
+                  <span className="text-[10px] font-bold uppercase tracking-wider block text-emerald-400">Profissional</span>
+                  <p className="text-lg font-black text-white mt-1">R$ 119<span className="text-[10px] font-normal">/mês</span></p>
+                </div>
+                <div className="mt-3 flex items-center gap-1 text-[11px]">
+                  <Check className={`w-3.5 h-3.5 ${selectedPlan === 'profissional' ? 'text-emerald-400' : 'text-slate-600'}`} /> Equipes & Completo
+                </div>
+              </div>
+            </div>
+          </div>
+
           <div>
             <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">Nome do Estabelecimento</label>
             <input

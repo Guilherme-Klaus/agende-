@@ -3,8 +3,9 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { Dashboard } from './components/Dashboard';
 import { SuperAdmin } from './components/SuperAdmin';
 import { Register } from './components/Register';
+import { LandingPage } from './components/LandingPage';
 import { ClientBooking } from './ClientBooking';
-import { ShieldCheck, LogIn, UserPlus, AlertTriangle } from 'lucide-react';
+import { ShieldCheck, LogIn, UserPlus, AlertTriangle, ArrowLeft } from 'lucide-react';
 
 export function App() {
   const [user, setUser] = useState<any>(null);
@@ -12,7 +13,7 @@ export function App() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [view, setView] = useState<'login' | 'register'>('login');
+  const [view, setView] = useState<'landing' | 'login' | 'register'>('landing');
 
   useEffect(() => {
     const savedUser = localStorage.getItem('agende_plus_user');
@@ -76,6 +77,7 @@ export function App() {
     localStorage.removeItem('agende_plus_user');
     setEmail('');
     setPassword('');
+    setView('landing');
   }
 
   return (
@@ -102,20 +104,40 @@ export function App() {
                   <Dashboard user={user} onLogout={handleLogout} />
                 )}
               </div>
-            ) : view === 'register' ? (
-              <Register
-                onRegisterSuccess={() => setView('login')}
-                onSwitchToLogin={() => setView('login')}
+            ) : view === 'landing' ? (
+              <LandingPage
+                onOpenLogin={() => setView('login')}
+                onOpenRegister={() => setView('register')}
               />
+            ) : view === 'register' ? (
+              <div className="relative min-h-screen bg-[#0f172a]">
+                <button
+                  onClick={() => setView('landing')}
+                  className="absolute top-6 left-6 text-slate-400 hover:text-white flex items-center gap-2 text-xs font-semibold bg-slate-800/60 px-4 py-2 rounded-xl transition-colors border border-slate-700"
+                >
+                  <ArrowLeft className="w-4 h-4" /> Voltar ao Início
+                </button>
+                <Register
+                  onRegisterSuccess={() => setView('login')}
+                  onSwitchToLogin={() => setView('login')}
+                />
+              </div>
             ) : (
-              <div className="min-h-screen bg-[#0f172a] flex items-center justify-center p-4">
+              <div className="min-h-screen bg-[#0f172a] flex items-center justify-center p-4 relative">
+                <button
+                  onClick={() => setView('landing')}
+                  className="absolute top-6 left-6 text-slate-400 hover:text-white flex items-center gap-2 text-xs font-semibold bg-slate-800/60 px-4 py-2 rounded-xl transition-colors border border-slate-700"
+                >
+                  <ArrowLeft className="w-4 h-4" /> Voltar ao Início
+                </button>
+
                 <div className="bg-[#1e293b]/80 backdrop-blur-xl border border-slate-700/60 p-8 rounded-3xl w-full max-w-md shadow-2xl text-slate-100">
                   <div className="flex items-center gap-3.5 mb-6">
                     <div className="bg-emerald-500/10 p-3 rounded-2xl border border-emerald-500/30">
                       <ShieldCheck className="w-8 h-8 text-emerald-400" />
                     </div>
                     <div>
-                      <h1 className="text-2xl font-bold tracking-tight text-white">Agende+ </h1>
+                      <h1 className="text-2xl font-bold tracking-tight text-white">Agende+</h1>
                       <p className="text-xs text-slate-400">Acesse o painel do seu estabelecimento</p>
                     </div>
                   </div>

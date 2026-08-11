@@ -20,11 +20,12 @@ model Tenant {
   pixKey          String?         
   isActive        Boolean         @default(false) 
   dueDate         DateTime?       
+  plan            String          @default("essencial") // Campo do plano (essencial ou profissional)
   
   minNoticeHours  Int             @default(2)     
   requireDeposit  Boolean         @default(false) 
   depositPercent  Int             @default(50)    
-  portfolioPhotos String?         // Novo: Armazena as fotos do portfólio (separadas por vírgula ou JSON)
+  portfolioPhotos String?         
 
   users           User[]
   services        Service[]
@@ -72,7 +73,7 @@ model Professional {
   avatarUrl    String?
   email        String?            @unique
   password     String?
-  commission   Float              @default(50.0) // Novo: Porcentagem de comissão do profissional (ex: 50%)
+  commission   Float              @default(50.0) 
   tenantId     String
   tenant       Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   appointments Appointment[]

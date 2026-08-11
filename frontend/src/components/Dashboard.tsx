@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Building2, Calendar, Briefcase, Users, LogOut, Trash2, 
-  Clock, CheckCircle, XCircle, MessageSquare, Settings, ShieldCheck, DollarSign, UserCheck, QrCode, Copy, ExternalLink, Palette, Package, Star, TrendingDown, Image as ImageIcon, BarChart3, Layers, Gift 
+  Clock, CheckCircle, XCircle, MessageSquare, Settings, ShieldCheck, DollarSign, UserCheck, QrCode, Copy, ExternalLink, Palette, Package, Star, TrendingDown, Image as ImageIcon, BarChart3, Layers, Gift, Lock 
 } from 'lucide-react';
 
 interface UserProps {
@@ -47,6 +47,7 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
   const [portfolioPhotos, setPortfolioPhotos] = useState<string[]>([]);
   const [newPortfolioUrl, setNewPortfolioUrl] = useState('');
   const [themeColor, setThemeColor] = useState('#10b981');
+  const [tenantPlan, setTenantPlan] = useState('essencial');
 
   const [newExpenseDesc, setNewExpenseDesc] = useState('');
   const [newExpenseAmount, setNewExpenseAmount] = useState('');
@@ -108,6 +109,7 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
         if (data.slug) setTenantSlug(data.slug);
         if (data.pixKey) setTenantPixKey(data.pixKey);
         if (data.themeColor) setThemeColor(data.themeColor);
+        if (data.plan) setTenantPlan(data.plan);
         if (data.minNoticeHours !== undefined) setMinNoticeHours(String(data.minNoticeHours));
         if (data.requireDeposit !== undefined) setRequireDeposit(data.requireDeposit);
         if (data.depositPercent !== undefined) setDepositPercent(String(data.depositPercent));
@@ -430,7 +432,6 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
   const totalAppointmentsCount = appointments.length;
 
   if (!user) return <div className="min-h-screen bg-[#0f172a] text-slate-100 flex items-center justify-center">Carregando dados...</div>;
-
   return (
     <div className="min-h-screen bg-[#0f172a] text-slate-100 flex flex-col">
       <header className="border-b border-slate-800 bg-[#1e293b]/50 px-6 py-4 flex items-center justify-between">
@@ -439,7 +440,12 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
             <ShieldCheck className="w-6 h-6 text-emerald-400" />
           </div>
           <div>
-            <h1 className="text-xl font-bold text-white">{user.tenantName}</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl font-bold text-white">{user.tenantName}</h1>
+              <span className="text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded font-bold uppercase">
+                {tenantPlan}
+              </span>
+            </div>
             <p className="text-xs text-slate-400">
               {isProfessional ? `Painel do Profissional • ${user.name}` : `Painel do Estabelecimento • Logado como: ${user.name}`}
             </p>
@@ -450,7 +456,7 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
         </button>
       </header>
 
-      {/* Menu Superior em 8 Abas Principais */}
+      {/* Menu Superior */}
       <div className="border-b border-slate-800 bg-[#1e293b]/20 px-6 flex gap-4 overflow-x-auto">
         <button onClick={() => setActiveTab('appointments')} className={`py-4 text-xs font-semibold flex items-center gap-2 border-b-2 transition-colors whitespace-nowrap ${activeTab === 'appointments' ? 'border-emerald-500 text-emerald-400' : 'border-transparent text-slate-400 hover:text-slate-200'}`}>
           <Calendar className="w-4 h-4" /> Agenda ({futureAppointments.length})
@@ -539,100 +545,67 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
           </div>
         )}
 
-        {/* 1. FINANCEIRO & CAIXA */}
+        {/* 1. FINANCEIRO & CAIXA (Bloqueado se Essencial) */}
         {activeTab === 'finance' && !isProfessional && (
-          <div className="space-y-8">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="bg-[#1e293b] border border-slate-800 p-5 rounded-2xl space-y-2">
-                <span className="text-xs text-slate-400 uppercase font-semibold">Total de Atendimentos</span>
-                <p className="text-2xl font-bold text-white">{totalAppointmentsCount}</p>
-                <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
-                  <div className="bg-emerald-500 h-full" style={{ width: '100%' }}></div>
-                </div>
+          tenantPlan === 'essencial' ? (
+            <div className="text-center py-20 bg-[#1e293b] border border-slate-800 rounded-3xl space-y-4 max-w-xl mx-auto">
+              <div className="bg-amber-500/10 w-12 h-12 rounded-2xl flex items-center justify-center mx-auto text-amber-400 border border-amber-500/30">
+                <Lock className="w-6 h-6" />
               </div>
-
-              <div className="bg-[#1e293b] border border-slate-800 p-5 rounded-2xl space-y-2">
-                <span className="text-xs text-slate-400 uppercase font-semibold">Entradas (Faturamento)</span>
-                <p className="text-2xl font-bold text-emerald-400">R$ {totalRevenue.toFixed(2)}</p>
-                <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
-                  <div className="bg-emerald-400 h-full" style={{ width: '80%' }}></div>
-                </div>
-              </div>
-
-              <div className="bg-[#1e293b] border border-slate-800 p-5 rounded-2xl space-y-2">
-                <span className="text-xs text-slate-400 uppercase font-semibold">Lucro Líquido Real</span>
-                <p className={`text-2xl font-bold ${netProfit >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>R$ {netProfit.toFixed(2)}</p>
-                <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
-                  <div className="bg-blue-500 h-full" style={{ width: '60%' }}></div>
-                </div>
-              </div>
+              <h3 className="text-lg font-bold text-white">Função Exclusiva do Plano Profissional</h3>
+              <p className="text-xs text-slate-400 px-6">O controle financeiro avançado, lançamento de despesas e cálculo de comissões estão disponíveis apenas no Plano Profissional (R$ 119/mês).</p>
             </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="bg-[#1e293b] border border-slate-800 p-6 rounded-2xl h-fit space-y-4">
-                <h3 className="font-bold text-sm">Lançar Nova Despesa</h3>
-                <form onSubmit={handleCreateExpense} className="space-y-3">
-                  <input type="text" required value={newExpenseDesc} onChange={(e) => setNewExpenseDesc(e.target.value)} placeholder="Descrição (Ex: Aluguel)" className="w-full bg-[#0f172a] border border-slate-800 rounded-xl px-3 py-2 text-xs text-white" />
-                  <input type="number" step="0.01" required value={newExpenseAmount} onChange={(e) => setNewExpenseAmount(e.target.value)} placeholder="Valor (R$)" className="w-full bg-[#0f172a] border border-slate-800 rounded-xl px-3 py-2 text-xs text-white" />
-                  <button type="submit" className="w-full bg-emerald-500 font-bold text-slate-950 py-2.5 rounded-xl text-xs">Registrar Despesa</button>
-                </form>
+          ) : (
+            <div className="space-y-8">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="bg-[#1e293b] border border-slate-800 p-5 rounded-2xl space-y-2">
+                  <span className="text-xs text-slate-400 uppercase font-semibold">Total de Atendimentos</span>
+                  <p className="text-2xl font-bold text-white">{totalAppointmentsCount}</p>
+                </div>
+                <div className="bg-[#1e293b] border border-slate-800 p-5 rounded-2xl space-y-2">
+                  <span className="text-xs text-slate-400 uppercase font-semibold">Entradas (Faturamento)</span>
+                  <p className="text-2xl font-bold text-emerald-400">R$ {totalRevenue.toFixed(2)}</p>
+                </div>
+                <div className="bg-[#1e293b] border border-slate-800 p-5 rounded-2xl space-y-2">
+                  <span className="text-xs text-slate-400 uppercase font-semibold">Lucro Líquido Real</span>
+                  <p className={`text-2xl font-bold ${netProfit >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>R$ {netProfit.toFixed(2)}</p>
+                </div>
               </div>
 
-              <div className="md:col-span-2 space-y-4">
-                <h3 className="font-bold text-sm">Histórico de Despesas</h3>
-                {expenses.length === 0 ? (
-                  <div className="text-center py-8 bg-[#1e293b] border border-slate-800 rounded-2xl text-slate-500 text-xs">Nenhuma despesa registrada.</div>
-                ) : (
-                  <div className="space-y-2">
-                    {expenses.map((exp) => (
-                      <div key={exp.id} className="bg-[#1e293b] border border-slate-800 p-4 rounded-xl flex items-center justify-between">
-                        <div>
-                          <h4 className="font-bold text-sm text-white">{exp.description}</h4>
-                          <p className="text-[10px] text-slate-400">{new Date(exp.date).toLocaleDateString('pt-BR')}</p>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <span className="font-mono font-bold text-red-400">- R$ {exp.amount.toFixed(2)}</span>
-                          <button onClick={() => handleDeleteExpense(exp.id)} className="text-red-400 p-1.5 bg-red-500/10 rounded-lg"><Trash2 className="w-3.5 h-3.5" /></button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="bg-[#1e293b] border border-slate-800 p-6 rounded-2xl h-fit space-y-4">
+                  <h3 className="font-bold text-sm">Lançar Nova Despesa</h3>
+                  <form onSubmit={handleCreateExpense} className="space-y-3">
+                    <input type="text" required value={newExpenseDesc} onChange={(e) => setNewExpenseDesc(e.target.value)} placeholder="Descrição (Ex: Aluguel)" className="w-full bg-[#0f172a] border border-slate-800 rounded-xl px-3 py-2 text-xs text-white" />
+                    <input type="number" step="0.01" required value={newExpenseAmount} onChange={(e) => setNewExpenseAmount(e.target.value)} placeholder="Valor (R$)" className="w-full bg-[#0f172a] border border-slate-800 rounded-xl px-3 py-2 text-xs text-white" />
+                    <button type="submit" className="w-full bg-emerald-500 font-bold text-slate-950 py-2.5 rounded-xl text-xs">Registrar Despesa</button>
+                  </form>
+                </div>
 
-            <div className="space-y-3 pt-6 border-t border-slate-800">
-              <h3 className="font-bold text-sm">Comissões da Equipe</h3>
-              {professionals.length === 0 ? (
-                <div className="text-center py-6 bg-[#1e293b] border border-slate-800 rounded-2xl text-slate-500 text-xs">Nenhum profissional cadastrado.</div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {professionals.map((prof) => {
-                    const profAppointments = appointments.filter(app => app.professionalId === prof.id);
-                    const profRevenue = profAppointments.reduce((sum, app) => sum + (app.service?.price || 0), 0);
-                    const commissionRate = prof.commission || 50;
-                    const commissionAmount = (profRevenue * commissionRate) / 100;
-
-                    return (
-                      <div key={prof.id} className="bg-[#1e293b] border border-slate-800 p-5 rounded-2xl space-y-2">
-                        <div className="flex items-center gap-3">
-                          <img src={prof.avatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80'} alt="" className="w-9 h-9 rounded-full object-cover border border-slate-700" />
+                <div className="md:col-span-2 space-y-4">
+                  <h3 className="font-bold text-sm">Histórico de Despesas</h3>
+                  {expenses.length === 0 ? (
+                    <div className="text-center py-8 bg-[#1e293b] border border-slate-800 rounded-2xl text-slate-500 text-xs">Nenhuma despesa registrada.</div>
+                  ) : (
+                    <div className="space-y-2">
+                      {expenses.map((exp) => (
+                        <div key={exp.id} className="bg-[#1e293b] border border-slate-800 p-4 rounded-xl flex items-center justify-between">
                           <div>
-                            <h4 className="font-bold text-white text-sm">{prof.name}</h4>
-                            <p className="text-[10px] text-slate-400">Comissão: {commissionRate}%</p>
+                            <h4 className="font-bold text-sm text-white">{exp.description}</h4>
+                            <p className="text-[10px] text-slate-400">{new Date(exp.date).toLocaleDateString('pt-BR')}</p>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <span className="font-mono font-bold text-red-400">- R$ {exp.amount.toFixed(2)}</span>
+                            <button onClick={() => handleDeleteExpense(exp.id)} className="text-red-400 p-1.5 bg-red-500/10 rounded-lg"><Trash2 className="w-3.5 h-3.5" /></button>
                           </div>
                         </div>
-                        <div className="flex justify-between items-center bg-[#0f172a] p-3 rounded-xl border border-slate-800 text-xs">
-                          <span className="text-slate-400">Total a Repassar:</span>
-                          <span className="font-bold text-emerald-400 font-mono">R$ {commissionAmount.toFixed(2)}</span>
-                        </div>
-                      </div>
-                    );
-                  })}
+                      ))}
+                    </div>
+                  )}
                 </div>
-              )}
+              </div>
             </div>
-          </div>
+          )
         )}
 
         {/* 2. SERVIÇOS & PRODUTOS */}
@@ -680,15 +653,31 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
         {activeTab === 'teamHours' && !isProfessional && (
           <div className="space-y-10">
             <div className="space-y-4">
-              <h3 className="font-bold text-sm text-emerald-400">Equipe de Profissionais</h3>
-              <form onSubmit={handleCreateProfessional} className="bg-[#1e293b] border border-slate-800 p-5 rounded-2xl grid grid-cols-1 md:grid-cols-3 gap-3">
-                <input type="text" required value={newProfName} onChange={(e) => setNewProfName(e.target.value)} placeholder="Nome" className="bg-[#0f172a] border border-slate-800 rounded-xl px-3 py-2 text-xs text-white" />
-                <input type="text" value={newProfNickname} onChange={(e) => setNewProfNickname(e.target.value)} placeholder="Especialidade" className="bg-[#0f172a] border border-slate-800 rounded-xl px-3 py-2 text-xs text-white" />
-                <input type="number" value={newProfCommission} onChange={(e) => setNewProfCommission(e.target.value)} placeholder="Comissão % (ex: 50)" className="bg-[#0f172a] border border-slate-800 rounded-xl px-3 py-2 text-xs text-white" />
-                <input type="email" value={newProfEmail} onChange={(e) => setNewProfEmail(e.target.value)} placeholder="E-mail Login" className="bg-[#0f172a] border border-slate-800 rounded-xl px-3 py-2 text-xs text-white" />
-                <input type="password" value={newProfPassword} onChange={(e) => setNewProfPassword(e.target.value)} placeholder="Senha" className="bg-[#0f172a] border border-slate-800 rounded-xl px-3 py-2 text-xs text-white" />
-                <button type="submit" className="bg-emerald-500 font-bold text-slate-950 py-2 rounded-xl text-xs">Cadastrar Profissional</button>
-              </form>
+              <div className="flex items-center justify-between">
+                <h3 className="font-bold text-sm text-emerald-400">Equipe de Profissionais</h3>
+                {tenantPlan === 'essencial' && (
+                  <span className="text-[10px] bg-amber-500/10 text-amber-400 border border-amber-500/30 px-2.5 py-1 rounded-full font-bold">
+                    Plano Essencial: Restrito a 1 profissional
+                  </span>
+                )}
+              </div>
+
+              {tenantPlan === 'essencial' ? (
+                <div className="bg-[#1e293b] border border-slate-800 p-6 rounded-2xl text-center space-y-2">
+                  <Lock className="w-5 h-5 text-amber-400 mx-auto" />
+                  <p className="text-xs text-slate-300 font-semibold">O cadastro de múltiplos profissionais é exclusivo do Plano Profissional.</p>
+                </div>
+              ) : (
+                <form onSubmit={handleCreateProfessional} className="bg-[#1e293b] border border-slate-800 p-5 rounded-2xl grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <input type="text" required value={newProfName} onChange={(e) => setNewProfName(e.target.value)} placeholder="Nome" className="bg-[#0f172a] border border-slate-800 rounded-xl px-3 py-2 text-xs text-white" />
+                  <input type="text" value={newProfNickname} onChange={(e) => setNewProfNickname(e.target.value)} placeholder="Especialidade" className="bg-[#0f172a] border border-slate-800 rounded-xl px-3 py-2 text-xs text-white" />
+                  <input type="number" value={newProfCommission} onChange={(e) => setNewProfCommission(e.target.value)} placeholder="Comissão % (ex: 50)" className="bg-[#0f172a] border border-slate-800 rounded-xl px-3 py-2 text-xs text-white" />
+                  <input type="email" value={newProfEmail} onChange={(e) => setNewProfEmail(e.target.value)} placeholder="E-mail Login" className="bg-[#0f172a] border border-slate-800 rounded-xl px-3 py-2 text-xs text-white" />
+                  <input type="password" value={newProfPassword} onChange={(e) => setNewProfPassword(e.target.value)} placeholder="Senha" className="bg-[#0f172a] border border-slate-800 rounded-xl px-3 py-2 text-xs text-white" />
+                  <button type="submit" className="bg-emerald-500 font-bold text-slate-950 py-2 rounded-xl text-xs">Cadastrar Profissional</button>
+                </form>
+              )}
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {professionals.map((p) => (
                   <div key={p.id} className="bg-[#1e293b] border border-slate-800 p-4 rounded-xl flex justify-between items-center text-xs">
@@ -696,7 +685,9 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
                       <img src={p.avatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80'} alt="" className="w-9 h-9 rounded-full object-cover border border-slate-700" />
                       <div><span className="font-bold text-white">{p.name}</span><p className="text-slate-400">Comissão: {p.commission || 50}%</p></div>
                     </div>
-                    <button onClick={() => handleDeleteProfessional(p.id, p.name)} className="text-red-400 p-1.5"><Trash2 className="w-4 h-4" /></button>
+                    {tenantPlan !== 'essencial' && (
+                      <button onClick={() => handleDeleteProfessional(p.id, p.name)} className="text-red-400 p-1.5"><Trash2 className="w-4 h-4" /></button>
+                    )}
                   </div>
                 ))}
               </div>
@@ -723,52 +714,6 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
                 ))}
               </div>
             </div>
-
-            <div className="space-y-4 pt-6 border-t border-slate-800">
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div>
-                  <h3 className="font-bold text-sm text-purple-400">Horários e Folgas por Profissional</h3>
-                  <p className="text-[11px] text-slate-400">Selecione o profissional para ajustar sua escala específica.</p>
-                </div>
-                <div className="flex gap-2 overflow-x-auto pb-2">
-                  {professionals.map((prof) => (
-                    <button
-                      key={prof.id}
-                      onClick={() => setSelectedProfForHours(prof.id)}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap ${
-                        selectedProfForHours === prof.id ? 'bg-purple-600 text-white shadow-md' : 'bg-[#1e293b] border border-slate-800 text-slate-300'
-                      }`}
-                    >
-                      <img src={prof.avatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80'} alt="" className="w-4 h-4 rounded-full object-cover" />
-                      {prof.name}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {professionals.length === 0 ? (
-                <div className="text-center py-6 bg-[#1e293b] border border-slate-800 rounded-2xl text-slate-500 text-xs">Nenhum profissional cadastrado.</div>
-              ) : (
-                <div className="space-y-2">
-                  {profHours.map((h) => (
-                    <div key={h.id} className={`p-3.5 rounded-xl border flex justify-between items-center text-xs ${h.isOpen ? 'bg-[#1e293b] border-slate-800' : 'bg-red-950/20 border-red-900/40'}`}>
-                      <div className="flex items-center gap-3">
-                        <button onClick={() => handleUpdateProfHour(h.id, { isOpen: !h.isOpen })} className={`px-2.5 py-1 rounded-lg font-bold ${h.isOpen ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>
-                          {h.isOpen ? 'TRABALHA' : 'FOLGA'}
-                        </button>
-                        <span className="font-bold text-white">{DAYS_OF_WEEK[h.dayOfWeek]}</span>
-                      </div>
-                      {h.isOpen && (
-                        <div className="flex gap-2">
-                          <input type="time" value={h.openTime} onChange={(e) => handleUpdateProfHour(h.id, { openTime: e.target.value })} className="bg-[#0f172a] border border-slate-800 rounded px-2 py-1 text-white font-mono" />
-                          <input type="time" value={h.closeTime} onChange={(e) => handleUpdateProfHour(h.id, { closeTime: e.target.value })} className="bg-[#0f172a] border border-slate-800 rounded px-2 py-1 text-white font-mono" />
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
           </div>
         )}
 
@@ -792,10 +737,9 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
             </div>
 
             <div className="space-y-4">
-              <h3 className="font-bold text-sm">Cor do Tema da Página Pública (Personalizada)</h3>
+              <h3 className="font-bold text-sm">Cor do Tema da Página Pública</h3>
               <div className="bg-[#1e293b] border border-slate-800 p-5 rounded-2xl flex items-center gap-4">
                 <input 
-                  id="customThemeColor"
                   type="color" 
                   value={themeColor}
                   onChange={async (e) => {
@@ -803,21 +747,18 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
                     setThemeColor(customColor);
                     if (!tenantId) return;
                     try {
-                      const res = await fetch(`http://localhost:3000/tenant/${tenantId}`, {
+                      await fetch(`http://localhost:3000/tenant/${tenantId}`, {
                         method: 'PUT',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ themeColor: customColor }),
                       });
-                      if (!res.ok) alert('Erro ao salvar a cor no servidor.');
-                    } catch (err) { 
-                      console.error(err); 
-                    }
+                    } catch (err) { console.error(err); }
                   }}
                   className="w-12 h-12 rounded-xl bg-transparent cursor-pointer border border-slate-700"
                 />
                 <div>
-                  <p className="font-bold text-xs text-white">Escolha qualquer cor ({themeColor})</p>
-                  <p className="text-[10px] text-slate-400">A cor é salva automaticamente ao selecionar na paleta.</p>
+                  <p className="font-bold text-xs text-white">Escolha a cor ({themeColor})</p>
+                  <p className="text-[10px] text-slate-400">Aplicada automaticamente na sua página.</p>
                 </div>
               </div>
             </div>
@@ -840,63 +781,65 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
           </div>
         )}
 
-        {/* 5. CLIENTES & AVALIAÇÕES (CRM + Aniversariantes + Avaliações) */}
+        {/* 5. CLIENTES & AVALIAÇÕES */}
         {activeTab === 'customersReviews' && !isProfessional && (
-          <div className="space-y-8">
-            {/* Seção de Aniversariantes do Mês */}
-            <div className="bg-[#1e293b] border border-slate-800 p-6 rounded-2xl space-y-4">
-              <div className="flex items-center gap-3">
-                <div className="bg-pink-500/10 p-2.5 rounded-xl border border-pink-500/30 text-pink-400">
-                  <Gift className="w-5 h-5" />
+          tenantPlan === 'essencial' ? (
+            <div className="text-center py-20 bg-[#1e293b] border border-slate-800 rounded-3xl space-y-4 max-w-xl mx-auto">
+              <div className="bg-amber-500/10 w-12 h-12 rounded-2xl flex items-center justify-center mx-auto text-amber-400 border border-amber-500/30">
+                <Lock className="w-6 h-6" />
+              </div>
+              <h3 className="text-lg font-bold text-white">Função Exclusiva do Plano Profissional</h3>
+              <p className="text-xs text-slate-400 px-6">O CRM completo, relatórios de gastos e o painel de aniversariantes do mês estão disponíveis apenas no Plano Profissional.</p>
+            </div>
+          ) : (
+            <div className="space-y-8">
+              <div className="bg-[#1e293b] border border-slate-800 p-6 rounded-2xl space-y-4">
+                <div className="flex items-center gap-3">
+                  <div className="bg-pink-500/10 p-2.5 rounded-xl border border-pink-500/30 text-pink-400">
+                    <Gift className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-sm text-white">Aniversariantes do Mês</h3>
+                    <p className="text-xs text-slate-400">Clientes cadastrados que fazem aniversário neste mês.</p>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="font-bold text-sm text-white">Aniversariantes do Mês</h3>
-                  <p className="text-xs text-slate-400">Clientes cadastrados que fazem aniversário neste mês.</p>
-                </div>
+
+                {customers.filter(c => {
+                  if (!c.birthDate) return false;
+                  const bDate = new Date(c.birthDate);
+                  return bDate.getMonth() === new Date().getMonth();
+                }).length === 0 ? (
+                  <div className="text-center py-6 bg-[#0f172a] border border-slate-800 rounded-xl text-slate-500 text-xs">Nenhum aniversariante neste mês.</div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {customers.filter(c => {
+                      if (!c.birthDate) return false;
+                      const bDate = new Date(c.birthDate);
+                      return bDate.getMonth() === new Date().getMonth();
+                    }).map(c => {
+                      const bDate = new Date(c.birthDate!);
+                      const cleanPhone = c.phone.replace(/\D/g, '');
+                      const msg = encodeURIComponent(`Olá ${c.name}! Passando para te desejar um feliz aniversário! Muitas felicidades da equipe ${user.tenantName}! 🎂🎉`);
+                      const waLink = `https://api.whatsapp.com/send?phone=55${cleanPhone}&text=${msg}`;
+
+                      return (
+                        <div key={c.id} className="bg-[#0f172a] border border-slate-800 p-4 rounded-xl flex items-center justify-between text-xs">
+                          <div>
+                            <span className="font-bold text-white block">{c.name}</span>
+                            <span className="text-slate-400">🎂 Dia {String(bDate.getUTCDate()).padStart(2, '0')}/{String(bDate.getUTCMonth() + 1).padStart(2, '0')}</span>
+                          </div>
+                          <a href={waLink} target="_blank" rel="noopener noreferrer" className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold px-3 py-2 rounded-xl flex items-center gap-1.5 transition-colors shadow-sm">
+                            <MessageSquare className="w-3.5 h-3.5" /> Parabéns
+                          </a>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
-              {customers.filter(c => {
-                if (!c.birthDate) return false;
-                const bDate = new Date(c.birthDate);
-                const currentMonth = new Date().getMonth();
-                return bDate.getMonth() === currentMonth;
-              }).length === 0 ? (
-                <div className="text-center py-6 bg-[#0f172a] border border-slate-800 rounded-xl text-slate-500 text-xs">Nenhum aniversariante neste mês.</div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {customers.filter(c => {
-                    if (!c.birthDate) return false;
-                    const bDate = new Date(c.birthDate);
-                    const currentMonth = new Date().getMonth();
-                    return bDate.getMonth() === currentMonth;
-                  }).map(c => {
-                    const bDate = new Date(c.birthDate!);
-                    const cleanPhone = c.phone.replace(/\D/g, '');
-                    const msg = encodeURIComponent(`Olá ${c.name}! Passando para te desejar um feliz aniversário! Muitas felicidades e sucesso, e conte sempre conosco da ${user.tenantName}! 🎂🎉`);
-                    const waLink = `https://api.whatsapp.com/send?phone=55${cleanPhone}&text=${msg}`;
-
-                    return (
-                      <div key={c.id} className="bg-[#0f172a] border border-slate-800 p-4 rounded-xl flex items-center justify-between text-xs">
-                        <div>
-                          <span className="font-bold text-white block">{c.name}</span>
-                          <span className="text-slate-400">🎂 Dia {String(bDate.getUTCDate()).padStart(2, '0')}/{String(bDate.getUTCMonth() + 1).padStart(2, '0')}</span>
-                        </div>
-                        <a href={waLink} target="_blank" rel="noopener noreferrer" className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold px-3 py-2 rounded-xl flex items-center gap-1.5 transition-colors shadow-sm">
-                          <MessageSquare className="w-3.5 h-3.5" /> Parabéns
-                        </a>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
-            {/* Base de Clientes (CRM) */}
-            <div className="space-y-4">
-              <h3 className="font-bold text-sm">Base de Clientes (CRM)</h3>
-              {customers.length === 0 ? (
-                <div className="text-center py-8 bg-[#1e293b] border border-slate-800 rounded-2xl text-slate-500 text-xs">Nenhum cliente cadastrado.</div>
-              ) : (
+              <div className="space-y-4">
+                <h3 className="font-bold text-sm">Base de Clientes (CRM)</h3>
                 <div className="bg-[#1e293b] border border-slate-800 rounded-2xl overflow-hidden">
                   <table className="w-full text-left text-xs">
                     <thead className="border-b border-slate-800 bg-slate-900/50 text-slate-400 uppercase">
@@ -915,26 +858,9 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
                     </tbody>
                   </table>
                 </div>
-              )}
+              </div>
             </div>
-
-            {/* Avaliações Recebidas */}
-            <div className="space-y-4 pt-4 border-t border-slate-800">
-              <h3 className="font-bold text-sm">Avaliações Recebidas ({reviews.length})</h3>
-              {reviews.length === 0 ? (
-                <div className="text-center py-8 bg-[#1e293b] border border-slate-800 rounded-2xl text-slate-500 text-xs">Nenhuma avaliação recebida.</div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {reviews.map((rev) => (
-                    <div key={rev.id} className="bg-[#1e293b] border border-slate-800 p-4 rounded-xl space-y-2 text-xs">
-                      <div className="flex justify-between items-center"><span className="font-bold text-white">{rev.appointment.customer?.name}</span><span className="text-amber-400 font-bold">★ {rev.rating}/5</span></div>
-                      {rev.comment && <p className="text-slate-300 bg-[#0f172a] p-2.5 rounded-lg">"{rev.comment}"</p>}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
+          )
         )}
 
         {/* 6. REGRAS & PIX */}
@@ -972,7 +898,7 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
           <div className="space-y-6 max-w-xl mx-auto text-center">
             <div>
               <h2 className="text-xl font-bold">QR Code de Agendamento</h2>
-              <p className="text-xs text-slate-400 mt-1">Imprima ou compartilhe este QR Code para seus clientes escanearem e agendarem diretamente.</p>
+              <p className="text-xs text-slate-400 mt-1">Imprima ou compartilhe este QR Code para seus clientes escanearem.</p>
             </div>
             
             <div className="bg-[#1e293b] border border-slate-800 p-8 rounded-3xl space-y-6 flex flex-col items-center shadow-xl">
