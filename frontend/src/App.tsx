@@ -5,7 +5,7 @@ import { SuperAdmin } from './components/SuperAdmin';
 import { Register } from './components/Register';
 import { LandingPage } from './components/LandingPage';
 import { ClientBooking } from './ClientBooking';
-import { ShieldCheck, LogIn, UserPlus, AlertTriangle, ArrowLeft } from 'lucide-react';
+import { ShieldCheck, LogIn, UserPlus, AlertTriangle, ArrowLeft, Lock } from 'lucide-react';
 
 export function App() {
   const [user, setUser] = useState<any>(null);
@@ -89,16 +89,42 @@ export function App() {
           path="/*"
           element={
             user && user.tenantId ? (
-              <div className="relative">
-                {/* --- AVISO DE CONTA INATIVA/PENDENTE DE PAGAMENTO NO TOPO --- */}
-                {user.tenantId !== 'super-admin' && user.isActive === false && (
-                  <div className="bg-amber-500 text-zinc-950 px-4 py-2 text-center text-xs font-bold flex items-center justify-center gap-2 shadow-md">
-                    <AlertTriangle className="w-4 h-4" />
-                    Sua conta está aguardando confirmação de pagamento. Entre em contato com o suporte para liberar o acesso total.
-                  </div>
-                )}
+              <div className="relative min-h-screen bg-[#0f172a]">
+                {/* --- TRAVA DE CONTA INATIVA / BLOQUEIO TOTAL DO PAINEL --- */}
+                {user.tenantId !== 'super-admin' && user.isActive === false ? (
+                  <div className="min-h-screen bg-[#0f172a] flex items-center justify-center p-4">
+                    <div className="bg-[#1e293b] border border-amber-500/40 p-8 rounded-3xl max-w-md w-full text-center space-y-6 shadow-2xl relative">
+                      <button
+                        onClick={handleLogout}
+                        className="absolute top-4 right-4 text-xs text-slate-400 hover:text-white bg-slate-800 px-3 py-1.5 rounded-xl transition-colors"
+                      >
+                        Sair da Conta
+                      </button>
 
-                {user.tenantId === 'super-admin' ? (
+                      <div className="bg-amber-500/10 w-16 h-16 rounded-2xl flex items-center justify-center mx-auto text-amber-400 border border-amber-500/30">
+                        <Lock className="w-8 h-8" />
+                      </div>
+
+                      <div className="space-y-2">
+                        <h2 className="text-xl font-bold text-white">Conta Aguardando Ativação</h2>
+                        <p className="text-xs text-slate-300 leading-relaxed">
+                          Sua empresa foi cadastrada com sucesso, mas o acesso ao painel está temporariamente bloqueado aguardando a confirmação do pagamento do plano.
+                        </p>
+                      </div>
+
+                      <div className="bg-[#0f172a] border border-slate-800 p-4 rounded-2xl text-left space-y-1">
+                        <span className="text-[10px] text-slate-400 uppercase font-bold block">Estabelecimento</span>
+                        <p className="text-xs font-semibold text-white">{user.tenantName}</p>
+                        <span className="text-[10px] text-slate-400 uppercase font-bold block pt-2">E-mail de Acesso</span>
+                        <p className="text-xs text-slate-300 font-mono">{user.email}</p>
+                      </div>
+
+                      <p className="text-[11px] text-slate-400">
+                        Assim que o pagamento for identificado pelo nosso suporte, sua conta será liberada automaticamente.
+                      </p>
+                    </div>
+                  </div>
+                ) : user.tenantId === 'super-admin' ? (
                   <SuperAdmin onLogout={handleLogout} />
                 ) : (
                   <Dashboard user={user} onLogout={handleLogout} />
