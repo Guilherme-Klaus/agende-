@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Building2, ShieldAlert, LogOut, Copy, Check, Trash2, Lock, Unlock, Search, Calendar } from 'lucide-react';
+import { Building2, ShieldAlert, LogOut, Copy, Check, Trash2, Lock, Unlock, Search, Calendar, DollarSign, Users, AlertCircle, CheckCircle2 } from 'lucide-react';
 
 interface Tenant {
   id: string;
@@ -124,7 +124,6 @@ export function SuperAdmin({ onLogout }: SuperAdminProps) {
     }
   }
 
-  // Filtragem de empresas (Busca + Filtro de Status)
   const filteredTenants = tenants.filter((tenant) => {
     const matchesSearch = tenant.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                           tenant.id.toLowerCase().includes(searchQuery.toLowerCase());
@@ -133,6 +132,13 @@ export function SuperAdmin({ onLogout }: SuperAdminProps) {
     if (statusFilter === 'blocked') return matchesSearch && !tenant.isActive;
     return matchesSearch;
   });
+
+  // Métricas para os Cards do Topo
+  const totalTenantsCount = tenants.length;
+  const activeTenantsCount = tenants.filter(t => t.isActive).length;
+  const blockedTenantsCount = totalTenantsCount - activeTenantsCount;
+  // Exemplo de cálculo de MRR baseado em R$ 99 por tenant ativo (você pode ajustar depois)
+  const estimatedMRR = activeTenantsCount * 99;
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col">
@@ -154,14 +160,53 @@ export function SuperAdmin({ onLogout }: SuperAdminProps) {
         </button>
       </header>
 
-      <main className="flex-1 p-6 max-w-6xl mx-auto w-full space-y-6">
-        <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+      <main className="flex-1 p-6 max-w-6xl mx-auto w-full space-y-8">
+        
+        {/* CARDS DE MÉTRICAS E PAGAMENTOS (SAAS OVERVIEW) */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="bg-zinc-900 border border-zinc-800 p-5 rounded-2xl space-y-2 shadow-sm">
+            <div className="flex items-center justify-between text-zinc-400">
+              <span className="text-xs uppercase font-semibold">Total de Empresas</span>
+              <Users className="w-4 h-4 text-amber-500" />
+            </div>
+            <p className="text-2xl font-bold text-white">{totalTenantsCount}</p>
+            <p className="text-[10px] text-zinc-500">Cadastradas na plataforma</p>
+          </div>
+
+          <div className="bg-zinc-900 border border-zinc-800 p-5 rounded-2xl space-y-2 shadow-sm">
+            <div className="flex items-center justify-between text-zinc-400">
+              <span className="text-xs uppercase font-semibold">Empresas Ativas</span>
+              <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+            </div>
+            <p className="text-2xl font-bold text-emerald-400">{activeTenantsCount}</p>
+            <p className="text-[10px] text-zinc-500">Com acesso liberado ao sistema</p>
+          </div>
+
+          <div className="bg-zinc-900 border border-zinc-800 p-5 rounded-2xl space-y-2 shadow-sm">
+            <div className="flex items-center justify-between text-zinc-400">
+              <span className="text-xs uppercase font-semibold">Bloqueadas / Inadimplentes</span>
+              <AlertCircle className="w-4 h-4 text-red-400" />
+            </div>
+            <p className="text-2xl font-bold text-red-400">{blockedTenantsCount}</p>
+            <p className="text-[10px] text-zinc-500">Acessos suspensos</p>
+          </div>
+
+          <div className="bg-zinc-900 border border-zinc-800 p-5 rounded-2xl space-y-2 shadow-sm">
+            <div className="flex items-center justify-between text-zinc-400">
+              <span className="text-xs uppercase font-semibold">MRR (Receita Estimada)</span>
+              <DollarSign className="w-4 h-4 text-amber-500" />
+            </div>
+            <p className="text-2xl font-bold text-amber-500 font-mono">R$ {estimatedMRR.toFixed(2)}</p>
+            <p className="text-[10px] text-zinc-500">Baseado em contas ativas</p>
+          </div>
+        </div>
+
+        <div className="flex flex-col md:flex-row items-center justify-between gap-4 pt-2">
           <div>
-            <h2 className="text-lg font-semibold">Empresas Assinantes</h2>
+            <h2 className="text-lg font-semibold">Gerenciamento de Assinantes</h2>
             <p className="text-xs text-zinc-400">Total filtrado: {filteredTenants.length} de {tenants.length} empresas</p>
           </div>
 
-          {/* Barra de Pesquisa e Filtros */}
           <div className="flex items-center gap-3 w-full md:w-auto">
             <div className="relative flex-1 md:w-64">
               <Search className="w-4 h-4 text-zinc-500 absolute left-3 top-3" />
@@ -209,7 +254,6 @@ export function SuperAdmin({ onLogout }: SuperAdminProps) {
                         <h3 className="font-bold text-base text-white">{tenant.name}</h3>
                       </div>
                       
-                      {/* Botão de Bloquear / Desbloquear */}
                       <button
                         onClick={() => handleToggleStatus(tenant.id, tenant.isActive)}
                         className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-[10px] font-bold uppercase transition-colors ${
@@ -226,7 +270,6 @@ export function SuperAdmin({ onLogout }: SuperAdminProps) {
                         {tenant.category || 'Geral'}
                       </span>
                       
-                      {/* Campo de Data de Vencimento */}
                       <div className="flex items-center gap-1.5 text-xs text-zinc-400">
                         <Calendar className="w-3.5 h-3.5 text-amber-500" />
                         <span>Vencimento:</span>
@@ -245,7 +288,6 @@ export function SuperAdmin({ onLogout }: SuperAdminProps) {
                     </p>
                   </div>
 
-                  {/* Campo de Edição de E-mail */}
                   <div className="pt-3 border-t border-zinc-800/80 space-y-2">
                     <label className="text-[11px] text-zinc-400 font-medium">
                       E-mail do Admin (Acesso e Resumo 20h):
