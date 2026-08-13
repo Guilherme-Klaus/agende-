@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { api } from '../services/api';
 import { 
   Building2, Calendar, Briefcase, Users, LogOut, Trash2, 
   Clock, CheckCircle, XCircle, MessageSquare, Settings, ShieldCheck, DollarSign, UserCheck, QrCode, Copy, ExternalLink, Palette, Package, Star, TrendingDown, Image as ImageIcon, BarChart3, Layers, Gift, Lock 
@@ -102,20 +103,18 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
 
   async function fetchTenantInfo() {
     try {
-      const res = await fetch(`http://localhost:3000/tenant/${tenantId}`);
-      if (res.ok) {
-        const data = await res.json();
-        if (data.logoUrl) setLogoPreview(data.logoUrl);
-        if (data.slug) setTenantSlug(data.slug);
-        if (data.pixKey) setTenantPixKey(data.pixKey);
-        if (data.themeColor) setThemeColor(data.themeColor);
-        if (data.plan) setTenantPlan(data.plan);
-        if (data.minNoticeHours !== undefined) setMinNoticeHours(String(data.minNoticeHours));
-        if (data.requireDeposit !== undefined) setRequireDeposit(data.requireDeposit);
-        if (data.depositPercent !== undefined) setDepositPercent(String(data.depositPercent));
-        if (data.portfolioPhotos) {
-          try { setPortfolioPhotos(JSON.parse(data.portfolioPhotos)); } catch { setPortfolioPhotos([]); }
-        }
+      const res = await api.get(`/tenant/${tenantId}`);
+      const data = res.data;
+      if (data.logoUrl) setLogoPreview(data.logoUrl);
+      if (data.slug) setTenantSlug(data.slug);
+      if (data.pixKey) setTenantPixKey(data.pixKey);
+      if (data.themeColor) setThemeColor(data.themeColor);
+      if (data.plan) setTenantPlan(data.plan);
+      if (data.minNoticeHours !== undefined) setMinNoticeHours(String(data.minNoticeHours));
+      if (data.requireDeposit !== undefined) setRequireDeposit(data.requireDeposit);
+      if (data.depositPercent !== undefined) setDepositPercent(String(data.depositPercent));
+      if (data.portfolioPhotos) {
+        try { setPortfolioPhotos(JSON.parse(data.portfolioPhotos)); } catch { setPortfolioPhotos([]); }
       }
     } catch (err) { console.error(err); }
   }
@@ -134,43 +133,41 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
     }
   }, [selectedProfForHours]);
 
-  async function fetchServices() { try { const res = await fetch(`http://localhost:3000/services/${tenantId}`); if (res.ok) setServices(await res.json()); } catch (err) {} }
-  async function fetchProducts() { try { const res = await fetch(`http://localhost:3000/products/${tenantId}`); if (res.ok) setProducts(await res.json()); } catch (err) {} }
-  async function fetchProfessionals() { try { const res = await fetch(`http://localhost:3000/professionals/${tenantId}`); if (res.ok) setProfessionals(await res.json()); } catch (err) {} }
-  async function fetchBusinessHours() { try { const res = await fetch(`http://localhost:3000/business-hours/${tenantId}`); if (res.ok) setBusinessHours(await res.json()); } catch (err) {} }
-  async function fetchCustomers() { try { const res = await fetch(`http://localhost:3000/customers-report/${tenantId}`); if (res.ok) setCustomers(await res.json()); } catch (err) {} }
-  async function fetchExpenses() { try { const res = await fetch(`http://localhost:3000/expenses/${tenantId}`); if (res.ok) setExpenses(await res.json()); } catch (err) {} }
-  async function fetchReviews() { try { const res = await fetch(`http://localhost:3000/reviews/${tenantId}`); if (res.ok) setReviews(await res.json()); } catch (err) {} }
+  async function fetchServices() { try { const res = await api.get(`/services/${tenantId}`); setServices(res.data); } catch (err) {} }
+  async function fetchProducts() { try { const res = await api.get(`/products/${tenantId}`); setProducts(res.data); } catch (err) {} }
+  async function fetchProfessionals() { try { const res = await api.get(`/professionals/${tenantId}`); setProfessionals(res.data); } catch (err) {} }
+  async function fetchBusinessHours() { try { const res = await api.get(`/business-hours/${tenantId}`); setBusinessHours(res.data); } catch (err) {} }
+  async function fetchCustomers() { try { const res = await api.get(`/customers-report/${tenantId}`); setCustomers(res.data); } catch (err) {} }
+  async function fetchExpenses() { try { const res = await api.get(`/expenses/${tenantId}`); setExpenses(res.data); } catch (err) {} }
+  async function fetchReviews() { try { const res = await api.get(`/reviews/${tenantId}`); setReviews(res.data); } catch (err) {} }
 
   async function fetchProfHours(profId: string) {
     try {
-      const res = await fetch(`http://localhost:3000/professional-hours/${profId}`);
-      if (res.ok) setProfHours(await res.json());
+      const res = await api.get(`/professional-hours/${profId}`);
+      setProfHours(res.data);
     } catch (err) { console.error(err); }
   }
 
   async function fetchAppointments() {
     if (!tenantId) return;
     try {
-      const res = await fetch(`http://localhost:3000/appointments/${tenantId}`);
-      if (res.ok) {
-        let data = await res.json();
-        if (isProfessional && user?.id) {
-          data = data.filter((app: any) => app.professionalId === user.id);
-        }
-        const enhancedData = data.map((app: any) => {
-          if (!app.whatsappLink && app.customer) {
-            const dateObj = new Date(app.date);
-            const msg = encodeURIComponent(
-              `Olá ${app.customer.name}! Passando para lembrar do seu agendamento de *${app.service?.name || 'Atendimento'}* para o dia *${dateObj.toLocaleDateString('pt-BR')} às ${dateObj.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}*. Te esperamos!`
-            );
-            const cleanPhone = app.customer.phone.replace(/\D/g, '');
-            app.whatsappLink = `https://api.whatsapp.com/send?phone=55${cleanPhone}&text=${msg}`;
-          }
-          return app;
-        });
-        setAppointments(enhancedData);
+      const res = await api.get(`/appointments/${tenantId}`);
+      let data = res.data;
+      if (isProfessional && user?.id) {
+        data = data.filter((app: any) => app.professionalId === user.id);
       }
+      const enhancedData = data.map((app: any) => {
+        if (!app.whatsappLink && app.customer) {
+          const dateObj = new Date(app.date);
+          const msg = encodeURIComponent(
+            `Olá ${app.customer.name}! Passando para lembrar do seu agendamento de *${app.service?.name || 'Atendimento'}* para o dia *${dateObj.toLocaleDateString('pt-BR')} às ${dateObj.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}*. Te esperamos!`
+          );
+          const cleanPhone = app.customer.phone.replace(/\D/g, '');
+          app.whatsappLink = `https://api.whatsapp.com/send?phone=55${cleanPhone}&text=${msg}`;
+        }
+        return app;
+      });
+      setAppointments(enhancedData);
     } catch (err) { console.error(err); }
   }
 
@@ -178,24 +175,18 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
     e.preventDefault();
     if (!tenantId) return;
     try {
-      const res = await fetch('http://localhost:3000/expense', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ description: newExpenseDesc, amount: Number(newExpenseAmount), tenantId })
-      });
-      if (res.ok) {
-        setNewExpenseDesc('');
-        setNewExpenseAmount('');
-        fetchExpenses();
-      }
+      await api.post('/expense', { description: newExpenseDesc, amount: Number(newExpenseAmount), tenantId });
+      setNewExpenseDesc('');
+      setNewExpenseAmount('');
+      fetchExpenses();
     } catch (err) { alert('Erro ao cadastrar despesa.'); }
   }
 
   async function handleDeleteExpense(id: string) {
     if (!confirm('Deseja excluir esta despesa?')) return;
     try {
-      const res = await fetch(`http://localhost:3000/expense/${id}`, { method: 'DELETE' });
-      if (res.ok) fetchExpenses();
+      await api.delete(`/expense/${id}`);
+      fetchExpenses();
     } catch (err) { alert('Erro ao excluir.'); }
   }
 
@@ -203,20 +194,18 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
     e.preventDefault();
     if (!tenantId) return;
     try {
-      const res = await fetch('http://localhost:3000/service', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: newServiceName, duration: Number(newServiceDuration), price: Number(newServicePrice), tenantId }),
-      });
-      if (res.ok) { setNewServiceName(''); setNewServicePrice(''); fetchServices(); }
+      await api.post('/service', { name: newServiceName, duration: Number(newServiceDuration), price: Number(newServicePrice), tenantId });
+      setNewServiceName(''); 
+      setNewServicePrice(''); 
+      fetchServices();
     } catch (err) { alert('Erro ao cadastrar serviço'); }
   }
 
   async function handleDeleteService(serviceId: string, serviceName: string) {
     if (!confirm(`Deseja realmente excluir o serviço "${serviceName}"?`)) return;
     try {
-      const res = await fetch(`http://localhost:3000/service/${serviceId}`, { method: 'DELETE' });
-      if (res.ok) fetchServices();
+      await api.delete(`/service/${serviceId}`);
+      fetchServices();
     } catch (err) { alert('Erro ao excluir serviço.'); }
   }
 
@@ -224,20 +213,18 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
     e.preventDefault();
     if (!tenantId) return;
     try {
-      const res = await fetch('http://localhost:3000/product', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: newProdName, price: Number(newProdPrice), stock: Number(newProdStock), tenantId }),
-      });
-      if (res.ok) { setNewProdName(''); setNewProdPrice(''); fetchProducts(); }
+      await api.post('/product', { name: newProdName, price: Number(newProdPrice), stock: Number(newProdStock), tenantId });
+      setNewProdName(''); 
+      setNewProdPrice(''); 
+      fetchProducts();
     } catch (err) { alert('Erro ao cadastrar produto'); }
   }
 
   async function handleDeleteProduct(productId: string) {
     if (!confirm('Deseja excluir este produto?')) return;
     try {
-      const res = await fetch(`http://localhost:3000/product/${productId}`, { method: 'DELETE' });
-      if (res.ok) fetchProducts();
+      await api.delete(`/product/${productId}`);
+      fetchProducts();
     } catch (err) { alert('Erro ao excluir produto.'); }
   }
 
@@ -245,32 +232,31 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
     e.preventDefault();
     if (!tenantId) return;
     try {
-      const res = await fetch('http://localhost:3000/professional', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          name: newProfName, 
-          nickname: newProfNickname, 
-          avatarUrl: newProfAvatar, 
-          email: newProfEmail || null,
-          password: newProfPassword || null,
-          commission: Number(newProfCommission) || 50,
-          tenantId 
-        }),
+      await api.post('/professional', { 
+        name: newProfName, 
+        nickname: newProfNickname, 
+        avatarUrl: newProfAvatar, 
+        email: newProfEmail || null,
+        password: newProfPassword || null,
+        commission: Number(newProfCommission) || 50,
+        tenantId 
       });
-      if (res.ok) { 
-        setNewProfName(''); setNewProfNickname(''); setNewProfAvatar(''); setNewProfEmail(''); setNewProfPassword(''); setNewProfCommission('50'); fetchProfessionals(); 
-      } else {
-        alert('Erro ao cadastrar profissional.');
-      }
+      setNewProfName(''); 
+      setNewProfNickname(''); 
+      setNewProfAvatar(''); 
+      setNewProfEmail(''); 
+      setNewProfPassword(''); 
+      setNewProfCommission('50'); 
+      fetchProfessionals();
     } catch (err) { alert('Erro ao cadastrar profissional'); }
   }
 
   async function handleDeleteProfessional(profId: string, profName: string) {
     if (!confirm(`Deseja realmente excluir o profissional ${profName}?`)) return;
     try {
-      const res = await fetch(`http://localhost:3000/professional/${profId}`, { method: 'DELETE' });
-      if (res.ok) { fetchProfessionals(); fetchAppointments(); }
+      await api.delete(`/professional/${profId}`);
+      fetchProfessionals(); 
+      fetchAppointments();
     } catch (err) { alert('Erro de conexão ao excluir.'); }
   }
 
@@ -281,11 +267,7 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
     setPortfolioPhotos(updatedPhotos);
     setNewPortfolioUrl('');
     try {
-      await fetch(`http://localhost:3000/tenant/${tenantId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ portfolioPhotos: JSON.stringify(updatedPhotos) }),
-      });
+      await api.put(`/tenant/${tenantId}`, { portfolioPhotos: JSON.stringify(updatedPhotos) });
       alert('Foto adicionada ao portfólio!');
     } catch (err) { alert('Erro ao salvar portfólio.'); }
   }
@@ -294,11 +276,7 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
     const updatedPhotos = portfolioPhotos.filter((_, i) => i !== index);
     setPortfolioPhotos(updatedPhotos);
     try {
-      await fetch(`http://localhost:3000/tenant/${tenantId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ portfolioPhotos: JSON.stringify(updatedPhotos) }),
-      });
+      await api.put(`/tenant/${tenantId}`, { portfolioPhotos: JSON.stringify(updatedPhotos) });
     } catch (err) {}
   }
 
@@ -307,12 +285,8 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
       const current = businessHours.find(h => h.id === hourId);
       if (!current) return;
       const payload = { ...current, ...updatedData };
-      const res = await fetch(`http://localhost:3000/business-hour/${hourId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      if (res.ok) fetchBusinessHours();
+      await api.put(`/business-hour/${hourId}`, payload);
+      fetchBusinessHours();
     } catch (err) { alert('Erro ao atualizar horário'); }
   }
 
@@ -321,42 +295,31 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
       const current = profHours.find(h => h.id === hourId);
       if (!current) return;
       const payload = { ...current, ...updatedData };
-      const res = await fetch(`http://localhost:3000/professional-hour/${hourId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      if (res.ok && selectedProfForHours) fetchProfHours(selectedProfForHours);
+      await api.put(`/professional-hour/${hourId}`, payload);
+      if (selectedProfForHours) fetchProfHours(selectedProfForHours);
     } catch (err) { alert('Erro ao atualizar horário do profissional'); }
   }
 
   async function handleCancelAppointment(id: string) {
     if (!confirm('Deseja realmente cancelar este agendamento?')) return;
     try {
-      const res = await fetch(`http://localhost:3000/appointment/${id}`, { method: 'DELETE' });
-      if (res.ok) { fetchAppointments(); if (!isProfessional) fetchCustomers(); }
+      await api.delete(`/appointment/${id}`);
+      fetchAppointments(); 
+      if (!isProfessional) fetchCustomers();
     } catch (err) { alert('Erro ao cancelar agendamento'); }
   }
 
   async function handleSavePixKey() {
     try {
-      const res = await fetch(`http://localhost:3000/tenant/${tenantId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pixKey: tenantPixKey }),
-      });
-      if (res.ok) alert('Chave PIX salva com sucesso!');
+      await api.put(`/tenant/${tenantId}`, { pixKey: tenantPixKey });
+      alert('Chave PIX salva com sucesso!');
     } catch (err) { alert('Erro de conexão.'); }
   }
 
   async function handleSaveRules() {
     try {
-      const res = await fetch(`http://localhost:3000/tenant/${tenantId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ minNoticeHours: Number(minNoticeHours), requireDeposit, depositPercent: Number(depositPercent) }),
-      });
-      if (res.ok) alert('Regras de agendamento salvas com sucesso!');
+      await api.put(`/tenant/${tenantId}`, { minNoticeHours: Number(minNoticeHours), requireDeposit, depositPercent: Number(depositPercent) });
+      alert('Regras de agendamento salvas com sucesso!');
     } catch (err) { alert('Erro de conexão.'); }
   }
 
@@ -368,11 +331,7 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
         const base64String = reader.result as string;
         setLogoPreview(base64String);
         try {
-          await fetch(`http://localhost:3000/tenant/${tenantId}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ logoUrl: base64String }),
-          });
+          await api.put(`/tenant/${tenantId}`, { logoUrl: base64String });
           alert('Foto de perfil atualizada com sucesso!');
         } catch (err) { alert('Erro ao salvar a imagem.'); }
       };
@@ -382,14 +341,9 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
 
   async function handleSaveSlug() {
     try {
-      const res = await fetch(`http://localhost:3000/tenant/${tenantId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ slug: tenantSlug }),
-      });
-      if (res.ok) alert('Link personalizado salvo com sucesso!');
-      else alert('Este link já pode estar em uso.');
-    } catch (err) { alert('Erro ao salvar link.'); }
+      await api.put(`/tenant/${tenantId}`, { slug: tenantSlug });
+      alert('Link personalizado salvo com sucesso!');
+    } catch (err) { alert('Este link já pode estar em uso.'); }
   }
 
   function handleCopyLink() {
@@ -747,11 +701,7 @@ export function Dashboard({ user, onLogout }: DashboardProps) {
                     setThemeColor(customColor);
                     if (!tenantId) return;
                     try {
-                      await fetch(`http://localhost:3000/tenant/${tenantId}`, {
-                        method: 'PUT',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ themeColor: customColor }),
-                      });
+                      await api.put(`/tenant/${tenantId}`, { themeColor: customColor });
                     } catch (err) { console.error(err); }
                   }}
                   className="w-12 h-12 rounded-xl bg-transparent cursor-pointer border border-slate-700"

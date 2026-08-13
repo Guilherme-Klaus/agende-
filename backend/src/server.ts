@@ -1,13 +1,15 @@
+import 'dotenv/config';
 import express, { Request, Response } from 'express';
 import cors from 'cors';
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import cron from 'node-cron';
+import { authMiddleware, tenantMatchMiddleware, superAdminMiddleware, AuthRequest } from './middleware/auth';
 
 const app = express();
 const prisma = new PrismaClient();
-const JWT_SECRET = 'segredo_super_secreto_agende_plus';
+const JWT_SECRET = process.env.JWT_SECRET as string;
 
 app.use(cors());
 app.use(express.json());
@@ -16,7 +18,45 @@ app.get('/', (req: Request, res: Response) => {
   res.send('Servidor do Agende+ rodando com sucesso! 🚀');
 });
 
-app.put('/admin/update-user-email/:userId', async (req: Request, res: Response) => {
+// ==========================================
+// ROTAS DO SUPER ADMIN (Protegidas)
+// ==========================================
+app.post('/super-admin-login', async (req: Request, res: Response) => {
+  try {
+    const { email, password } = req.body;
+    
+    if (email !== process.env.SUPER_ADMIN_EMAIL && email !== 'guilhermeoklaus@gmail.com') {
+      return res.status(401).json({ error: 'E-mail ou senha inválidos.' });
+    }
+    
+    const match = await bcrypt.compare(password, process.env.SUPER_ADMIN_PASSWORD_HASH as string);
+    if (!match) {
+      return res.status(401).json({ error: 'E-mail ou senha inválidos.' });
+    }
+    
+    const token = jwt.sign(
+      { userId: 'super-admin', tenantId: 'super-admin', role: 'super-admin' }, 
+      JWT_SECRET, 
+      { expiresIn: '1d' }
+    );
+    
+    // O tenantId foi adicionado aqui dentro do objeto user!
+    return res.status(200).json({ 
+      token, 
+      user: { 
+        email, 
+        role: 'super-admin', 
+        tenantName: 'Painel Master',
+        tenantId: 'super-admin'
+      } 
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: 'Erro interno.' });
+  }
+});
+
+app.put('/admin/update-user-email/:userId', authMiddleware, superAdminMiddleware, async (req: Request, res: Response) => {
   try {
     const { userId } = req.params;
     const { newEmail } = req.body;
@@ -30,7 +70,7 @@ app.put('/admin/update-user-email/:userId', async (req: Request, res: Response) 
   }
 });
 
-app.put('/admin/toggle-tenant-status/:tenantId', async (req: Request, res: Response) => {
+app.put('/admin/toggle-tenant-status/:tenantId', authMiddleware, superAdminMiddleware, async (req: Request, res: Response) => {
   try {
     const { tenantId } = req.params;
     const { isActive } = req.body;
@@ -44,7 +84,7 @@ app.put('/admin/toggle-tenant-status/:tenantId', async (req: Request, res: Respo
   }
 });
 
-app.put('/admin/update-tenant-due-date/:tenantId', async (req: Request, res: Response) => {
+app.put('/admin/update-tenant-due-date/:tenantId', authMiddleware, superAdminMiddleware, async (req: Request, res: Response) => {
   try {
     const { tenantId } = req.params;
     const { dueDate } = req.body;
@@ -58,7 +98,7 @@ app.put('/admin/update-tenant-due-date/:tenantId', async (req: Request, res: Res
   }
 });
 
-app.put('/admin/update-tenant-plan/:tenantId', async (req: Request, res: Response) => {
+app.put('/admin/update-tenant-plan/:tenantId', authMiddleware, superAdminMiddleware, async (req: Request, res: Response) => {
   try {
     const { tenantId } = req.params;
     const { plan } = req.body;
@@ -72,6 +112,49 @@ app.put('/admin/update-tenant-plan/:tenantId', async (req: Request, res: Respons
   }
 });
 
+app.get('/tenants', authMiddleware, superAdminMiddleware, async (req: Request, res: Response) => {
+  try {
+    const tenants = await prisma.tenant.findMany({ 
+      include: { users: true }, 
+      orderBy: { name: 'asc' } 
+    });
+    return res.status(200).json(tenants);
+  } catch (error) {
+    return res.status(500).json({ error: 'Erro ao buscar empresas.' });
+  }
+});
+
+app.delete('/tenant/:id', authMiddleware, superAdminMiddleware, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    
+    await prisma.appointment.deleteMany({ where: { tenantId: id } });
+    await prisma.expense.deleteMany({ where: { tenantId: id } });
+
+    const profs = await prisma.professional.findMany({ where: { tenantId: id } });
+    for (const p of profs) {
+      await prisma.professionalHour.deleteMany({ where: { professionalId: p.id } });
+    }
+
+    await prisma.businessHour.deleteMany({ where: { tenantId: id } });
+    await prisma.user.deleteMany({ where: { tenantId: id } });
+    await prisma.service.deleteMany({ where: { tenantId: id } });
+    await prisma.product.deleteMany({ where: { tenantId: id } });
+    await prisma.professional.deleteMany({ where: { tenantId: id } });
+    await prisma.customer.deleteMany({ where: { tenantId: id } });
+
+    await prisma.tenant.delete({ where: { id } });
+
+    return res.status(200).json({ message: 'Empresa removida com sucesso.' });
+  } catch (error) {
+    console.error(error);
+    return res.status(400).json({ error: 'Erro ao excluir a empresa.' });
+  }
+});
+
+// ==========================================
+// ROTAS DE TENANTS E CADASTRO
+// ==========================================
 app.post('/tenant', async (req: Request, res: Response) => {
   try {
     const { name, category, whatsapp, address, closingHour, themeColor, logoUrl, slug, pixKey, minNoticeHours, requireDeposit, depositPercent, plan } = req.body;
@@ -120,18 +203,6 @@ app.post('/tenant', async (req: Request, res: Response) => {
   }
 });
 
-app.get('/tenants', async (req: Request, res: Response) => {
-  try {
-    const tenants = await prisma.tenant.findMany({ 
-      include: { users: true }, 
-      orderBy: { name: 'asc' } 
-    });
-    return res.status(200).json(tenants);
-  } catch (error) {
-    return res.status(500).json({ error: 'Erro ao buscar empresas.' });
-  }
-});
-
 app.get('/tenant/:identifier', async (req: Request, res: Response) => {
   try {
     const { identifier } = req.params;
@@ -146,9 +217,13 @@ app.get('/tenant/:identifier', async (req: Request, res: Response) => {
   }
 });
 
-app.put('/tenant/:id', async (req: Request, res: Response) => {
+app.put('/tenant/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
+    if (req.role !== 'super-admin' && id !== req.tenantId) {
+      return res.status(403).json({ error: 'Acesso negado.' });
+    }
+
     const { name, category, whatsapp, address, themeColor, logoUrl, slug, pixKey, minNoticeHours, requireDeposit, depositPercent, closingHour, portfolioPhotos, plan } = req.body;
     
     const existing = await prisma.tenant.findUnique({ where: { id } });
@@ -179,99 +254,9 @@ app.put('/tenant/:id', async (req: Request, res: Response) => {
   }
 });
 
-app.delete('/tenant/:id', async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params;
-    
-    await prisma.appointment.deleteMany({ where: { tenantId: id } });
-    await prisma.expense.deleteMany({ where: { tenantId: id } });
-
-    const profs = await prisma.professional.findMany({ where: { tenantId: id } });
-    for (const p of profs) {
-      await prisma.professionalHour.deleteMany({ where: { professionalId: p.id } });
-    }
-
-    await prisma.businessHour.deleteMany({ where: { tenantId: id } });
-    await prisma.user.deleteMany({ where: { tenantId: id } });
-    await prisma.service.deleteMany({ where: { tenantId: id } });
-    await prisma.product.deleteMany({ where: { tenantId: id } });
-    await prisma.professional.deleteMany({ where: { tenantId: id } });
-    await prisma.customer.deleteMany({ where: { tenantId: id } });
-
-    await prisma.tenant.delete({ where: { id } });
-
-    return res.status(200).json({ message: 'Empresa removida com sucesso.' });
-  } catch (error) {
-    console.error(error);
-    return res.status(400).json({ error: 'Erro ao excluir a empresa.' });
-  }
-});
-
-app.get('/business-hours/:tenantId', async (req: Request, res: Response) => {
-  try {
-    const { tenantId } = req.params;
-    const hours = await prisma.businessHour.findMany({ where: { tenantId }, orderBy: { dayOfWeek: 'asc' } });
-    return res.status(200).json(hours);
-  } catch (error) {
-    return res.status(500).json({ error: 'Erro ao buscar horários.' });
-  }
-});
-
-app.put('/business-hour/:id', async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params;
-    const { isOpen, openTime, closeTime, lunchStart, lunchEnd } = req.body;
-    const updated = await prisma.businessHour.update({
-      where: { id },
-      data: { isOpen, openTime, closeTime, lunchStart, lunchEnd },
-    });
-    return res.status(200).json(updated);
-  } catch (error) {
-    return res.status(400).json({ error: 'Erro ao atualizar horário.' });
-  }
-});
-
-app.get('/professional-hours/:professionalId', async (req: Request, res: Response) => {
-  try {
-    const { professionalId } = req.params;
-    let hours = await prisma.professionalHour.findMany({ where: { professionalId }, orderBy: { dayOfWeek: 'asc' } });
-    
-    if (hours.length === 0) {
-      const defaultHours = [
-        { dayOfWeek: 0, isOpen: false, openTime: '09:00', closeTime: '19:00', lunchStart: '12:00', lunchEnd: '13:00' },
-        { dayOfWeek: 1, isOpen: true, openTime: '09:00', closeTime: '19:00', lunchStart: '12:00', lunchEnd: '13:00' },
-        { dayOfWeek: 2, isOpen: true, openTime: '09:00', closeTime: '19:00', lunchStart: '12:00', lunchEnd: '13:00' },
-        { dayOfWeek: 3, isOpen: true, openTime: '09:00', closeTime: '19:00', lunchStart: '12:00', lunchEnd: '13:00' },
-        { dayOfWeek: 4, isOpen: true, openTime: '09:00', closeTime: '19:00', lunchStart: '12:00', lunchEnd: '13:00' },
-        { dayOfWeek: 5, isOpen: true, openTime: '09:00', closeTime: '19:30', lunchStart: '12:00', lunchEnd: '13:00' },
-        { dayOfWeek: 6, isOpen: true, openTime: '09:00', closeTime: '17:00', lunchStart: '12:00', lunchEnd: '13:00' },
-      ];
-      for (const h of defaultHours) {
-        await prisma.professionalHour.create({ data: { ...h, professionalId } });
-      }
-      hours = await prisma.professionalHour.findMany({ where: { professionalId }, orderBy: { dayOfWeek: 'asc' } });
-    }
-
-    return res.status(200).json(hours);
-  } catch (error) {
-    return res.status(500).json({ error: 'Erro ao buscar horários do profissional.' });
-  }
-});
-
-app.put('/professional-hour/:id', async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params;
-    const { isOpen, openTime, closeTime, lunchStart, lunchEnd } = req.body;
-    const updated = await prisma.professionalHour.update({
-      where: { id },
-      data: { isOpen, openTime, closeTime, lunchStart, lunchEnd },
-    });
-    return res.status(200).json(updated);
-  } catch (error) {
-    return res.status(400).json({ error: 'Erro ao atualizar horário do profissional.' });
-  }
-});
-
+// ==========================================
+// ROTAS DE AUTENTICAÇÃO E LOGIN
+// ==========================================
 app.post('/user', async (req: Request, res: Response) => {
   try {
     const { name, email, password, tenantId } = req.body;
@@ -298,7 +283,27 @@ app.post('/login', async (req: Request, res: Response) => {
     const passwordMatch = await bcrypt.compare(password, user.password);
     if (!passwordMatch) return res.status(401).json({ error: 'E-mail ou senha inválidos.' });
     
-    const token = jwt.sign({ userId: user.id, tenantId: user.tenantId }, JWT_SECRET, { expiresIn: '7d' });
+    // Verifica se a empresa está ativa
+    if (user.tenant && user.tenant.isActive === false) {
+      return res.status(200).json({
+        token: jwt.sign({ userId: user.id, tenantId: user.tenantId, role: 'admin' }, JWT_SECRET, { expiresIn: '7d' }),
+        user: {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          tenantId: user.tenantId,
+          tenantName: user.tenant.name,
+          isActive: false, 
+          role: 'admin',
+        }
+      });
+    }
+
+    const token = jwt.sign(
+      { userId: user.id, tenantId: user.tenantId, role: 'admin' }, 
+      JWT_SECRET, 
+      { expiresIn: '7d' }
+    );
     return res.status(200).json({
       token,
       user: {
@@ -312,6 +317,7 @@ app.post('/login', async (req: Request, res: Response) => {
       },
     });
   } catch (error) {
+    console.error(error);
     return res.status(500).json({ error: 'Erro interno no servidor.' });
   }
 });
@@ -331,7 +337,13 @@ app.post('/professional-login', async (req: Request, res: Response) => {
     if (!passwordMatch) {
       return res.status(401).json({ error: 'E-mail ou senha inválidos.' });
     }
+    const token = jwt.sign(
+      { userId: professional.id, tenantId: professional.tenantId, role: 'professional' }, 
+      JWT_SECRET, 
+      { expiresIn: '7d' }
+    );
     return res.status(200).json({
+      token,
       user: {
         id: professional.id,
         name: professional.name,
@@ -343,13 +355,94 @@ app.post('/professional-login', async (req: Request, res: Response) => {
       }
     });
   } catch (error) {
+    console.error(error);
     return res.status(500).json({ error: 'Erro no login do profissional.' });
   }
 });
 
-app.post('/service', async (req: Request, res: Response) => {
+// ==========================================
+// ROTAS DE OPERAÇÃO (Serviços, Produtos, Agenda, etc.)
+// ==========================================
+app.get('/business-hours/:tenantId', authMiddleware, tenantMatchMiddleware, async (req: Request, res: Response) => {
   try {
-    const { name, duration, price, tenantId } = req.body;
+    const { tenantId } = req.params;
+    const hours = await prisma.businessHour.findMany({ where: { tenantId }, orderBy: { dayOfWeek: 'asc' } });
+    return res.status(200).json(hours);
+  } catch (error) {
+    return res.status(500).json({ error: 'Erro ao buscar horários.' });
+  }
+});
+
+app.get('/business-hours/:tenantId/public', async (req: Request, res: Response) => {
+  try {
+    const { tenantId } = req.params;
+    const hours = await prisma.businessHour.findMany({ where: { tenantId }, orderBy: { dayOfWeek: 'asc' } });
+    return res.status(200).json(hours);
+  } catch (error) {
+    return res.status(500).json({ error: 'Erro ao buscar horários.' });
+  }
+});
+
+app.put('/business-hour/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { isOpen, openTime, closeTime, lunchStart, lunchEnd } = req.body;
+    const updated = await prisma.businessHour.update({
+      where: { id },
+      data: { isOpen, openTime, closeTime, lunchStart, lunchEnd },
+    });
+    return res.status(200).json(updated);
+  } catch (error) {
+    return res.status(400).json({ error: 'Erro ao atualizar horário.' });
+  }
+});
+
+app.get('/professional-hours/:professionalId', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const { professionalId } = req.params;
+    let hours = await prisma.professionalHour.findMany({ where: { professionalId }, orderBy: { dayOfWeek: 'asc' } });
+    
+    if (hours.length === 0) {
+      const defaultHours = [
+        { dayOfWeek: 0, isOpen: false, openTime: '09:00', closeTime: '19:00', lunchStart: '12:00', lunchEnd: '13:00' },
+        { dayOfWeek: 1, isOpen: true, openTime: '09:00', closeTime: '19:00', lunchStart: '12:00', lunchEnd: '13:00' },
+        { dayOfWeek: 2, isOpen: true, openTime: '09:00', closeTime: '19:00', lunchStart: '12:00', lunchEnd: '13:00' },
+        { dayOfWeek: 3, isOpen: true, openTime: '09:00', closeTime: '19:00', lunchStart: '12:00', lunchEnd: '13:00' },
+        { dayOfWeek: 4, isOpen: true, openTime: '09:00', closeTime: '19:00', lunchStart: '12:00', lunchEnd: '13:00' },
+        { dayOfWeek: 5, isOpen: true, openTime: '09:00', closeTime: '19:30', lunchStart: '12:00', lunchEnd: '13:00' },
+        { dayOfWeek: 6, isOpen: true, openTime: '09:00', closeTime: '17:00', lunchStart: '12:00', lunchEnd: '13:00' },
+      ];
+      for (const h of defaultHours) {
+        await prisma.professionalHour.create({ data: { ...h, professionalId } });
+      }
+      hours = await prisma.professionalHour.findMany({ where: { professionalId }, orderBy: { dayOfWeek: 'asc' } });
+    }
+
+    return res.status(200).json(hours);
+  } catch (error) {
+    return res.status(500).json({ error: 'Erro ao buscar horários do profissional.' });
+  }
+});
+
+app.put('/professional-hour/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { isOpen, openTime, closeTime, lunchStart, lunchEnd } = req.body;
+    const updated = await prisma.professionalHour.update({
+      where: { id },
+      data: { isOpen, openTime, closeTime, lunchStart, lunchEnd },
+    });
+    return res.status(200).json(updated);
+  } catch (error) {
+    return res.status(400).json({ error: 'Erro ao atualizar horário do profissional.' });
+  }
+});
+
+app.post('/service', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const { name, duration, price } = req.body;
+    const tenantId = req.role === 'super-admin' ? req.body.tenantId : req.tenantId;
+
     const newService = await prisma.service.create({
       data: { name, duration: Number(duration) || 30, price: Number(price) || 0, tenantId },
     });
@@ -359,7 +452,7 @@ app.post('/service', async (req: Request, res: Response) => {
   }
 });
 
-app.get('/services/:tenantId', async (req: Request, res: Response) => {
+app.get('/services/:tenantId', authMiddleware, tenantMatchMiddleware, async (req: Request, res: Response) => {
   try {
     const { tenantId } = req.params;
     const services = await prisma.service.findMany({ where: { tenantId }, orderBy: { name: 'asc' } });
@@ -369,7 +462,17 @@ app.get('/services/:tenantId', async (req: Request, res: Response) => {
   }
 });
 
-app.delete('/service/:id', async (req: Request, res: Response) => {
+app.get('/services/:tenantId/public', async (req: Request, res: Response) => {
+  try {
+    const { tenantId } = req.params;
+    const services = await prisma.service.findMany({ where: { tenantId }, orderBy: { name: 'asc' } });
+    return res.status(200).json(services);
+  } catch (error) {
+    return res.status(200).json([]);
+  }
+});
+
+app.delete('/service/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
     await prisma.appointment.updateMany({
@@ -383,9 +486,11 @@ app.delete('/service/:id', async (req: Request, res: Response) => {
   }
 });
 
-app.post('/product', async (req: Request, res: Response) => {
+app.post('/product', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const { name, price, stock, tenantId } = req.body;
+    const { name, price, stock } = req.body;
+    const tenantId = req.role === 'super-admin' ? req.body.tenantId : req.tenantId;
+
     const newProduct = await prisma.product.create({
       data: { name, price: Number(price) || 0, stock: Number(stock) || 0, tenantId },
     });
@@ -395,7 +500,7 @@ app.post('/product', async (req: Request, res: Response) => {
   }
 });
 
-app.get('/products/:tenantId', async (req: Request, res: Response) => {
+app.get('/products/:tenantId', authMiddleware, tenantMatchMiddleware, async (req: Request, res: Response) => {
   try {
     const { tenantId } = req.params;
     const products = await prisma.product.findMany({ where: { tenantId }, orderBy: { name: 'asc' } });
@@ -405,7 +510,7 @@ app.get('/products/:tenantId', async (req: Request, res: Response) => {
   }
 });
 
-app.delete('/product/:id', async (req: Request, res: Response) => {
+app.delete('/product/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
     await prisma.product.delete({ where: { id } });
@@ -415,9 +520,11 @@ app.delete('/product/:id', async (req: Request, res: Response) => {
   }
 });
 
-app.post('/expense', async (req: Request, res: Response) => {
+app.post('/expense', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const { description, amount, tenantId } = req.body;
+    const { description, amount } = req.body;
+    const tenantId = req.role === 'super-admin' ? req.body.tenantId : req.tenantId;
+
     const expense = await prisma.expense.create({
       data: { description, amount: Number(amount) || 0, tenantId }
     });
@@ -427,7 +534,7 @@ app.post('/expense', async (req: Request, res: Response) => {
   }
 });
 
-app.get('/expenses/:tenantId', async (req: Request, res: Response) => {
+app.get('/expenses/:tenantId', authMiddleware, tenantMatchMiddleware, async (req: Request, res: Response) => {
   try {
     const { tenantId } = req.params;
     const expenses = await prisma.expense.findMany({ where: { tenantId }, orderBy: { date: 'desc' } });
@@ -437,7 +544,7 @@ app.get('/expenses/:tenantId', async (req: Request, res: Response) => {
   }
 });
 
-app.delete('/expense/:id', async (req: Request, res: Response) => {
+app.delete('/expense/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
     await prisma.expense.delete({ where: { id } });
@@ -459,7 +566,7 @@ app.post('/review', async (req: Request, res: Response) => {
   }
 });
 
-app.get('/reviews/:tenantId', async (req: Request, res: Response) => {
+app.get('/reviews/:tenantId', authMiddleware, tenantMatchMiddleware, async (req: Request, res: Response) => {
   try {
     const { tenantId } = req.params;
     const reviews = await prisma.review.findMany({
@@ -473,9 +580,11 @@ app.get('/reviews/:tenantId', async (req: Request, res: Response) => {
   }
 });
 
-app.post('/professional', async (req: Request, res: Response) => {
+app.post('/professional', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const { name, nickname, avatarUrl, email, password, commission, tenantId } = req.body;
+    const { name, nickname, avatarUrl, email, password, commission } = req.body;
+    const tenantId = req.role === 'super-admin' ? req.body.tenantId : req.tenantId;
+
     let hashedPassword = null;
     if (password) {
       hashedPassword = await bcrypt.hash(password, 10);
@@ -497,7 +606,7 @@ app.post('/professional', async (req: Request, res: Response) => {
   }
 });
 
-app.get('/professionals/:tenantId', async (req: Request, res: Response) => {
+app.get('/professionals/:tenantId', authMiddleware, tenantMatchMiddleware, async (req: Request, res: Response) => {
   try {
     const { tenantId } = req.params;
     const professionals = await prisma.professional.findMany({ where: { tenantId }, orderBy: { name: 'asc' } });
@@ -507,7 +616,17 @@ app.get('/professionals/:tenantId', async (req: Request, res: Response) => {
   }
 });
 
-app.delete('/professional/:id', async (req: Request, res: Response) => {
+app.get('/professionals/:tenantId/public', async (req: Request, res: Response) => {
+  try {
+    const { tenantId } = req.params;
+    const professionals = await prisma.professional.findMany({ where: { tenantId }, orderBy: { name: 'asc' } });
+    return res.status(200).json(professionals);
+  } catch (error) {
+    return res.status(200).json([]);
+  }
+});
+
+app.delete('/professional/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
     await prisma.professionalHour.deleteMany({ where: { professionalId: id } });
@@ -577,7 +696,7 @@ app.get('/customer-appointments/:tenantId', async (req: Request, res: Response) 
   }
 });
 
-app.get('/customers-report/:tenantId', async (req: Request, res: Response) => {
+app.get('/customers-report/:tenantId', authMiddleware, tenantMatchMiddleware, async (req: Request, res: Response) => {
   try {
     const { tenantId } = req.params;
     const customers = await prisma.customer.findMany({
@@ -611,13 +730,31 @@ app.get('/customers-report/:tenantId', async (req: Request, res: Response) => {
 app.post('/appointment', async (req: Request, res: Response) => {
   try {
     const { date, tenantId, customerId, serviceId, professionalId, productIds } = req.body;
-    const appointmentDate = new Date(date);
+    const start = new Date(date);
 
-    const conflictingAppointment = await prisma.appointment.findFirst({
-      where: { tenantId, date: appointmentDate, professionalId: professionalId || null },
+    const service = serviceId ? await prisma.service.findUnique({ where: { id: serviceId } }) : null;
+    const duration = service?.duration || 30;
+    const end = new Date(start.getTime() + duration * 60000);
+
+    const sameDayAppointments = await prisma.appointment.findMany({
+      where: {
+        tenantId,
+        professionalId: professionalId || null,
+        date: {
+          gte: new Date(start.getFullYear(), start.getMonth(), start.getDate()),
+          lt: new Date(start.getFullYear(), start.getMonth(), start.getDate() + 1),
+        },
+      },
+      include: { service: true },
     });
 
-    if (conflictingAppointment) {
+    const hasConflict = sameDayAppointments.some((a) => {
+      const aStart = new Date(a.date);
+      const aEnd = new Date(aStart.getTime() + (a.service?.duration || 30) * 60000);
+      return start < aEnd && end > aStart;
+    });
+
+    if (hasConflict) {
       return res.status(400).json({ error: 'Este horário já está ocupado para este profissional.' });
     }
 
@@ -634,12 +771,12 @@ app.post('/appointment', async (req: Request, res: Response) => {
     }
 
     const newAppointment = await prisma.appointment.create({
-      data: { date: appointmentDate, tenantId, customerId, serviceId: serviceId || null, professionalId: professionalId || null },
+      data: { date: start, tenantId, customerId, serviceId: serviceId || null, professionalId: professionalId || null },
       include: { customer: true, tenant: true, service: true, professional: true },
     });
 
-    const formattedDate = appointmentDate.toLocaleDateString('pt-BR');
-    const formattedTime = appointmentDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    const formattedDate = start.toLocaleDateString('pt-BR');
+    const formattedTime = start.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
     const serviceName = newAppointment.service?.name || 'Atendimento';
     const tenantName = newAppointment.tenant?.name || 'Estabelecimento';
     
@@ -659,7 +796,7 @@ app.post('/appointment', async (req: Request, res: Response) => {
   }
 });
 
-app.get('/appointments/:tenantId', async (req: Request, res: Response) => {
+app.get('/appointments/:tenantId', authMiddleware, tenantMatchMiddleware, async (req: Request, res: Response) => {
   try {
     const { tenantId } = req.params;
     const appointments = await prisma.appointment.findMany({
@@ -673,9 +810,36 @@ app.get('/appointments/:tenantId', async (req: Request, res: Response) => {
   }
 });
 
+app.get('/appointments/:tenantId/slots', async (req: Request, res: Response) => {
+  try {
+    const { tenantId } = req.params;
+    const appointments = await prisma.appointment.findMany({
+      where: { tenantId },
+      select: { date: true, professionalId: true, service: { select: { duration: true } } },
+    });
+    return res.status(200).json(appointments);
+  } catch (error) {
+    return res.status(200).json([]);
+  }
+});
+
 app.delete('/appointment/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
+    const { phone } = req.query;
+
+    const appointment = await prisma.appointment.findUnique({ 
+      where: { id }, 
+      include: { customer: true } 
+    });
+    
+    if (!appointment) return res.status(404).json({ error: 'Agendamento não encontrado.' });
+
+    const cleanPhone = String(phone || '').replace(/\D/g, '');
+    if (!cleanPhone || appointment.customer.phone !== cleanPhone) {
+      return res.status(403).json({ error: 'Não autorizado a cancelar este agendamento.' });
+    }
+
     await prisma.appointment.delete({ where: { id } });
     return res.status(200).json({ message: 'Agendamento cancelado com sucesso!' });
   } catch (error) {
@@ -687,6 +851,7 @@ cron.schedule('0 20 * * *', async () => {
   console.log('🤖 Executando rotina de disparo dos resumos diários (20h)...');
 });
 
-app.listen(3000, () => {
-  console.log('🔥 Servidor do Agende+ rodando na porta 3000');
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`🔥 Servidor do Agende+ rodando na porta ${PORT}`);
 });

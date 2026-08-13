@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
+import { api } from './services/api';
 import { Store, MapPin, ArrowLeft, CheckCircle2, CheckCircle, ArrowRight, History, Calendar, Trash2, Copy, DollarSign, Package, Star } from 'lucide-react';
 
 interface Tenant {
@@ -97,43 +98,41 @@ export function ClientBooking() {
 
   async function fetchTenantInfo() {
     try {
-      const res = await fetch(`http://localhost:3000/tenant/${tenantId}`);
-      if (res.ok) {
-        const data = await res.json();
-        setTenant(data);
-        fetchServices(data.id);
-        fetchProducts(data.id);
-        fetchProfessionals(data.id);
-        fetchBusinessHours(data.id);
-      }
+      const res = await api.get(`/tenant/${tenantId}`);
+      const data = res.data;
+      setTenant(data);
+      fetchServices(data.id);
+      fetchProducts(data.id);
+      fetchProfessionals(data.id);
+      fetchBusinessHours(data.id);
     } catch (err) { console.error(err); }
   }
 
   async function fetchServices(realTenantId: string) {
     try {
-      const res = await fetch(`http://localhost:3000/services/${realTenantId}`);
-      if (res.ok) setServices(await res.json());
+      const res = await api.get(`/services/${realTenantId}/public`);
+      setServices(res.data);
     } catch (err) { console.error(err); }
   }
 
   async function fetchProducts(realTenantId: string) {
     try {
-      const res = await fetch(`http://localhost:3000/products/${realTenantId}`);
-      if (res.ok) setProducts(await res.json());
+      const res = await api.get(`/products/${realTenantId}`);
+      setProducts(res.data);
     } catch (err) { console.error(err); }
   }
 
   async function fetchProfessionals(realTenantId: string) {
     try {
-      const res = await fetch(`http://localhost:3000/professionals/${realTenantId}`);
-      if (res.ok) setProfessionals(await res.json());
+      const res = await api.get(`/professionals/${realTenantId}/public`);
+      setProfessionals(res.data);
     } catch (err) { console.error(err); }
   }
 
   async function fetchBusinessHours(realTenantId: string) {
     try {
-      const res = await fetch(`http://localhost:3000/business-hours/${realTenantId}`);
-      if (res.ok) setBusinessHours(await res.json());
+      const res = await api.get(`/business-hours/${realTenantId}/public`);
+      setBusinessHours(res.data);
     } catch (err) { console.error(err); }
   }
 
@@ -143,8 +142,8 @@ export function ClientBooking() {
 
   async function fetchProfessionalHours(profId: string) {
     try {
-      const res = await fetch(`http://localhost:3000/professional-hours/${profId}`);
-      if (res.ok) setProfessionalHours(await res.json());
+      const res = await api.get(`/professional-hours/${profId}`);
+      setProfessionalHours(res.data);
     } catch (err) { console.error(err); }
   }
 
@@ -154,37 +153,36 @@ export function ClientBooking() {
 
   async function fetchBookedAppointments(realTenantId: string) {
     try {
-      const res = await fetch(`http://localhost:3000/appointments/${realTenantId}`);
-      if (res.ok) {
-        const data = await res.json();
-        const appointmentsOnDate = data.filter((item: any) => new Date(item.date).toISOString().split('T')[0] === selectedDate);
+      // Uso da rota enxuta de slots públicos (segurança Fase 4.3)
+      const res = await api.get(`/appointments/${realTenantId}/slots`);
+      const data = res.data;
+      const appointmentsOnDate = data.filter((item: any) => new Date(item.date).toISOString().split('T')[0] === selectedDate);
 
-        if (selectedProfessional) {
-          const times = appointmentsOnDate
-            .filter((item: any) => item.professionalId === selectedProfessional.id)
-            .map((item: any) => {
-              const d = new Date(item.date);
-              return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-            });
+      if (selectedProfessional) {
+        const times = appointmentsOnDate
+          .filter((item: any) => item.professionalId === selectedProfessional.id)
+          .map((item: any) => {
+            const d = new Date(item.date);
+            return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+          });
+        setBookedTimes(times);
+      } else {
+        const totalProfessionals = professionals.length;
+        if (totalProfessionals === 0) {
+          const times = appointmentsOnDate.map((item: any) => {
+            const d = new Date(item.date);
+            return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+          });
           setBookedTimes(times);
         } else {
-          const totalProfessionals = professionals.length;
-          if (totalProfessionals === 0) {
-            const times = appointmentsOnDate.map((item: any) => {
-              const d = new Date(item.date);
-              return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-            });
-            setBookedTimes(times);
-          } else {
-            const timeCounts: { [key: string]: number } = {};
-            appointmentsOnDate.forEach((item: any) => {
-              const d = new Date(item.date);
-              const tStr = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-              timeCounts[tStr] = (timeCounts[tStr] || 0) + 1;
-            });
-            const fullyBookedTimes = Object.keys(timeCounts).filter((time) => timeCounts[time] >= totalProfessionals);
-            setBookedTimes(fullyBookedTimes);
-          }
+          const timeCounts: { [key: string]: number } = {};
+          appointmentsOnDate.forEach((item: any) => {
+            const d = new Date(item.date);
+            const tStr = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+            timeCounts[tStr] = (timeCounts[tStr] || 0) + 1;
+          });
+          const fullyBookedTimes = Object.keys(timeCounts).filter((time) => timeCounts[time] >= totalProfessionals);
+          setBookedTimes(fullyBookedTimes);
         }
       }
     } catch (err) { console.error(err); }
@@ -194,12 +192,9 @@ export function ClientBooking() {
     e.preventDefault();
     if (!tenant || !searchPhone) return;
     try {
-      const res = await fetch(`http://localhost:3000/customer-appointments/${tenant.id}?phone=${encodeURIComponent(searchPhone)}`);
-      if (res.ok) {
-        const data = await res.json();
-        setClientAppointments(data);
-        setMode('history');
-      }
+      const res = await api.get(`/customer-appointments/${tenant.id}?phone=${encodeURIComponent(searchPhone)}`);
+      setClientAppointments(res.data);
+      setMode('history');
     } catch (err) {
       alert('Erro ao buscar histórico.');
     }
@@ -208,33 +203,24 @@ export function ClientBooking() {
   async function handleCancelAppointment(appId: string) {
     if (!confirm('Deseja realmente cancelar este agendamento?')) return;
     try {
-      const res = await fetch(`http://localhost:3000/appointment/${appId}`, { method: 'DELETE' });
-      if (res.ok) {
-        alert('Agendamento cancelado com sucesso.');
-        handleSearchHistory({ preventDefault: () => {} } as any);
-      }
-    } catch (err) {
-      alert('Erro ao cancelar.');
+      // Envia o telefone para validação de segurança no cancelamento (Fase 4.2)
+      await api.delete(`/appointment/${appId}?phone=${encodeURIComponent(searchPhone)}`);
+      alert('Agendamento cancelado com sucesso.');
+      handleSearchHistory({ preventDefault: () => {} } as any);
+    } catch (err: any) {
+      alert(err.response?.data?.error || 'Erro ao cancelar.');
     }
   }
 
   async function handleSendReview(e: React.FormEvent) {
     e.preventDefault();
     try {
-      const res = await fetch('http://localhost:3000/review', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ appointmentId: reviewAppointmentId, rating, comment })
-      });
-      if (res.ok) {
-        alert('Obrigado pela sua avaliação!');
-        setShowReviewModal(false);
-        handleSearchHistory({ preventDefault: () => {} } as any);
-      } else {
-        alert('Erro ao enviar avaliação.');
-      }
+      await api.post('/review', { appointmentId: reviewAppointmentId, rating, comment });
+      alert('Obrigado pela sua avaliação!');
+      setShowReviewModal(false);
+      handleSearchHistory({ preventDefault: () => {} } as any);
     } catch (err) {
-      alert('Erro de conexão.');
+      alert('Erro ao enviar avaliação.');
     }
   }
 
@@ -308,17 +294,13 @@ export function ClientBooking() {
 
     setLoading(true);
     try {
-      const customerRes = await fetch('http://localhost:3000/customer', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          name: clientName, 
-          phone: clientPhone, 
-          birthDate: clientBirthDate || null, 
-          tenantId: tenant.id 
-        }),
+      const customerRes = await api.post('/customer', { 
+        name: clientName, 
+        phone: clientPhone, 
+        birthDate: clientBirthDate || null, 
+        tenantId: tenant.id 
       });
-      const customerData = await customerRes.json();
+      const customerData = customerRes.data;
 
       const [hours, minutes] = selectedTime.split(':');
       const appointmentDate = new Date(selectedDate + 'T00:00:00');
@@ -326,39 +308,30 @@ export function ClientBooking() {
 
       let assignedProfessionalId = selectedProfessional ? selectedProfessional.id : null;
       if (!assignedProfessionalId && professionals.length > 0) {
-        const resApp = await fetch(`http://localhost:3000/appointments/${tenant.id}`);
-        if (resApp.ok) {
-          const allApps = await resApp.json();
-          const busyProfIds = allApps
-            .filter((item: any) => new Date(item.date).getTime() === appointmentDate.getTime() && item.professionalId)
-            .map((item: any) => item.professionalId);
+        const resApp = await api.get(`/appointments/${tenant.id}/slots`);
+        const allApps = resApp.data;
+        const busyProfIds = allApps
+          .filter((item: any) => new Date(item.date).getTime() === appointmentDate.getTime() && item.professionalId)
+          .map((item: any) => item.professionalId);
 
-          const freeProf = professionals.find((p) => !busyProfIds.includes(p.id));
-          assignedProfessionalId = freeProf ? freeProf.id : professionals[0].id;
-        }
+        const freeProf = professionals.find((p) => !busyProfIds.includes(p.id));
+        assignedProfessionalId = freeProf ? freeProf.id : professionals[0].id;
       }
 
-      const appointmentRes = await fetch('http://localhost:3000/appointment', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          date: appointmentDate.toISOString(),
-          tenantId: tenant.id,
-          customerId: customerData.id,
-          serviceId: selectedServiceIds[0],
-          professionalId: assignedProfessionalId,
-          productIds: selectedProductIds,
-        }),
+      const appointmentRes = await api.post('/appointment', {
+        date: appointmentDate.toISOString(),
+        tenantId: tenant.id,
+        customerId: customerData.id,
+        serviceId: selectedServiceIds[0],
+        professionalId: assignedProfessionalId,
+        productIds: selectedProductIds,
       });
 
-      if (appointmentRes.ok) {
+      if (appointmentRes.status === 201) {
         setStep('success');
-      } else {
-        const errData = await appointmentRes.json();
-        alert(errData.error || 'Erro ao realizar agendamento.');
       }
-    } catch (err) {
-      alert('Erro de conexão.');
+    } catch (err: any) {
+      alert(err.response?.data?.error || 'Erro ao realizar agendamento.');
     } finally {
       setLoading(false);
     }
@@ -431,7 +404,7 @@ export function ClientBooking() {
           <button 
             onClick={() => {
               localStorage.clear();
-              window.location.href = 'http://localhost:5173';
+              window.location.href = '/';
             }}
             className="bg-slate-800 hover:bg-slate-700 text-slate-200 px-4 py-2 rounded-xl text-xs font-medium transition-colors"
           >
@@ -488,7 +461,6 @@ export function ClientBooking() {
               </div>
             </div>
 
-            {/* SEÇÃO DO PORTFÓLIO DE FOTOS NA PÁGINA PÚBLICA */}
             {tenant.portfolioPhotos && (() => {
               try {
                 const photos: string[] = JSON.parse(tenant.portfolioPhotos);

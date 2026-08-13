@@ -5,6 +5,7 @@ import { SuperAdmin } from './components/SuperAdmin';
 import { Register } from './components/Register';
 import { LandingPage } from './components/LandingPage';
 import { ClientBooking } from './ClientBooking';
+import { api } from './services/api';
 import { ShieldCheck, LogIn, UserPlus, AlertTriangle, ArrowLeft, Lock } from 'lucide-react';
 
 export function App() {
@@ -17,56 +18,39 @@ export function App() {
 
   useEffect(() => {
     const savedUser = localStorage.getItem('agende_plus_user');
-    if (savedUser) {
+    const savedToken = localStorage.getItem('token');
+    if (savedUser && savedToken) {
       setUser(JSON.parse(savedUser));
     }
   }, []);
 
-  async function handleLogin(e: React.FormEvent) {
+  async function handleLogin(e: React.FormEvent | React.MouseEvent) {
     e.preventDefault();
     setLoading(true);
     setError('');
 
-    if (email === 'admin@agendeplus.com' && password === 'Guilherme2103@') {
-      const superAdminUser = { name: 'Super Admin', email, tenantId: 'super-admin', tenantName: 'Painel Master', role: 'super-admin' };
-      setUser(superAdminUser);
-      localStorage.setItem('agende_plus_user', JSON.stringify(superAdminUser));
-      setLoading(false);
-      return;
-    }
-
     try {
-      let res = await fetch('http://localhost:3000/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
-      });
+      let res;
 
-      let data = await res.json();
-
-      if (res.ok) {
-        setUser(data.user);
-        localStorage.setItem('agende_plus_user', JSON.stringify(data.user));
-        setLoading(false);
-        return;
-      }
-
-      res = await fetch('http://localhost:3000/professional-login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
-      });
-
-      data = await res.json();
-
-      if (res.ok) {
-        setUser(data.user);
-        localStorage.setItem('agende_plus_user', JSON.stringify(data.user));
+      if (email === 'guilhermeoklaus@gmail.com') {
+        res = await api.post('/super-admin-login', { email, password });
       } else {
-        setError(data.error || 'E-mail ou senha inválidos.');
+        try {
+          res = await api.post('/login', { email, password });
+        } catch (err: any) {
+          res = await api.post('/professional-login', { email, password });
+        }
       }
-    } catch (err) {
-      setError('Erro de conexão com o servidor.');
+
+      if (res && res.status === 200) {
+        localStorage.setItem('token', res.data.token);
+        localStorage.setItem('agende_plus_user', JSON.stringify(res.data.user));
+        setUser(res.data.user);
+      }
+    } catch (err: any) {
+      const errorMsg = err.response?.data?.error || 'E-mail ou senha inválidos.';
+      setError(errorMsg);
+      alert(errorMsg);
     } finally {
       setLoading(false);
     }
@@ -75,6 +59,7 @@ export function App() {
   function handleLogout() {
     setUser(null);
     localStorage.removeItem('agende_plus_user');
+    localStorage.removeItem('token');
     setEmail('');
     setPassword('');
     setView('landing');
@@ -90,7 +75,6 @@ export function App() {
           element={
             user && user.tenantId ? (
               <div className="relative min-h-screen bg-[#0f172a]">
-                {/* --- TRAVA DE CONTA INATIVA / BLOQUEIO TOTAL DO PAINEL --- */}
                 {user.tenantId !== 'super-admin' && user.isActive === false ? (
                   <div className="min-h-screen bg-[#0f172a] flex items-center justify-center p-4">
                     <div className="bg-[#1e293b] border border-amber-500/40 p-8 rounded-3xl max-w-md w-full text-center space-y-6 shadow-2xl relative">
@@ -174,7 +158,7 @@ export function App() {
                     </div>
                   )}
 
-                  <form onSubmit={handleLogin} className="space-y-4">
+                  <form onSubmit={(e) => e.preventDefault()} className="space-y-4">
                     <div>
                       <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">E-mail</label>
                       <input
@@ -198,9 +182,10 @@ export function App() {
                     </div>
 
                     <button
-                      type="submit"
+                      type="button"
+                      onClick={handleLogin}
                       disabled={loading}
-                      className="w-full bg-emerald-500 hover:bg-emerald-400 font-bold text-slate-950 py-3.5 rounded-xl transition-all shadow-lg shadow-emerald-500/20 text-xs disabled:opacity-50 flex items-center justify-center gap-2 mt-2"
+                      className="w-full bg-emerald-500 hover:bg-emerald-400 font-bold text-slate-950 py-3.5 rounded-xl transition-all shadow-lg shadow-emerald-500/20 text-xs disabled:opacity-50 flex items-center justify-center gap-2 mt-2 cursor-pointer"
                     >
                       <LogIn className="w-4 h-4 text-slate-950" />
                       {loading ? 'Entrando...' : 'Entrar no Sistema'}

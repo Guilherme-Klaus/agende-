@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Building2, ShieldAlert, LogOut, Copy, Check, Trash2, Lock, Unlock, Search, Calendar, DollarSign, Users, AlertCircle, CheckCircle2, Award } from 'lucide-react';
+import { api } from '../services/api'; // 🚀 Importamos a nossa API configurada aqui!
 
 interface Tenant {
   id: string;
@@ -28,30 +29,26 @@ export function SuperAdmin({ onLogout }: SuperAdminProps) {
     fetchTenants();
   }, []);
 
+  // Substituímos o fetch puro pela nossa API
   async function fetchTenants() {
     try {
-      const res = await fetch('http://localhost:3000/tenants');
-      if (res.ok) {
-        const data = await res.json();
-        setTenants(data);
+      const res = await api.get('/tenants');
+      if (res.status === 200) {
+        setTenants(res.data);
       }
     } catch (err) {
-      console.error('Erro ao buscar lista de empresas');
+      console.error('Erro ao buscar lista de empresas', err);
     }
   }
 
   async function handleToggleStatus(tenantId: string, currentStatus: boolean) {
     try {
-      const res = await fetch(`http://localhost:3000/admin/toggle-tenant-status/${tenantId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ isActive: !currentStatus }),
+      const res = await api.put(`/admin/toggle-tenant-status/${tenantId}`, {
+        isActive: !currentStatus
       });
 
-      if (res.ok) {
+      if (res.status === 200) {
         fetchTenants();
-      } else {
-        alert('Erro ao alterar status da conta.');
       }
     } catch (err) {
       alert('Erro de conexão ao alterar status.');
@@ -60,38 +57,30 @@ export function SuperAdmin({ onLogout }: SuperAdminProps) {
 
   async function handleChangePlan(tenantId: string, newPlan: string) {
     try {
-      const res = await fetch(`http://localhost:3000/admin/update-tenant-plan/${tenantId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ plan: newPlan }),
+      const res = await api.put(`/admin/update-tenant-plan/${tenantId}`, {
+        plan: newPlan
       });
 
-      if (res.ok) {
+      if (res.status === 200) {
         fetchTenants();
-      } else {
-        alert('Erro ao atualizar plano.');
       }
     } catch (err) {
-      alert('Erro de conexão.');
+      alert('Erro ao atualizar plano.');
     }
   }
 
   async function handleUpdateDueDate(tenantId: string, newDate: string) {
     try {
-      const res = await fetch(`http://localhost:3000/admin/update-tenant-due-date/${tenantId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ dueDate: newDate || null }),
+      const res = await api.put(`/admin/update-tenant-due-date/${tenantId}`, {
+        dueDate: newDate || null
       });
 
-      if (res.ok) {
+      if (res.status === 200) {
         alert('Data de vencimento atualizada!');
         fetchTenants();
-      } else {
-        alert('Erro ao atualizar vencimento.');
       }
     } catch (err) {
-      alert('Erro de conexão.');
+      alert('Erro de conexão ao atualizar vencimento.');
     }
   }
 
@@ -103,17 +92,13 @@ export function SuperAdmin({ onLogout }: SuperAdminProps) {
     }
 
     try {
-      const res = await fetch(`http://localhost:3000/admin/update-user-email/${userId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ newEmail }),
+      const res = await api.put(`/admin/update-user-email/${userId}`, {
+        newEmail
       });
 
-      if (res.ok) {
+      if (res.status === 200) {
         alert('E-mail atualizado com sucesso!');
         fetchTenants();
-      } else {
-        alert('Erro ao atualizar e-mail.');
       }
     } catch (err) {
       alert('Erro de conexão ao atualizar e-mail.');
@@ -131,12 +116,10 @@ export function SuperAdmin({ onLogout }: SuperAdminProps) {
     if (!window.confirm(`Tem certeza que deseja excluir a empresa "${name}" permanentemente?`)) return;
 
     try {
-      const res = await fetch(`http://localhost:3000/tenant/${id}`, { method: 'DELETE' });
-      if (res.ok) {
+      const res = await api.delete(`/tenant/${id}`);
+      if (res.status === 200) {
         alert('Empresa removida com sucesso.');
         fetchTenants();
-      } else {
-        alert('Erro ao tentar excluir a empresa.');
       }
     } catch (err) {
       alert('Erro de conexão ao excluir empresa.');
@@ -156,7 +139,6 @@ export function SuperAdmin({ onLogout }: SuperAdminProps) {
   const activeTenantsCount = tenants.filter(t => t.isActive).length;
   const blockedTenantsCount = totalTenantsCount - activeTenantsCount;
   
-  // Cálculo MRR dinâmico baseado no plano selecionado de cada tenant ativo
   const estimatedMRR = tenants.reduce((sum, t) => {
     if (!t.isActive) return sum;
     return sum + (t.plan === 'profissional' ? 119 : 79);
@@ -293,7 +275,6 @@ export function SuperAdmin({ onLogout }: SuperAdminProps) {
                           {tenant.category || 'Geral'}
                         </span>
                         
-                        {/* Seletor de Plano pelo Super Admin */}
                         <select
                           value={tenant.plan || 'essencial'}
                           onChange={(e) => handleChangePlan(tenant.id, e.target.value)}
