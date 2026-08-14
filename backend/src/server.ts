@@ -5,14 +5,30 @@ import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import cron from 'node-cron';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
 import { authMiddleware, tenantMatchMiddleware, superAdminMiddleware, AuthRequest } from './middleware/auth';
 
 const app = express();
 const prisma = new PrismaClient();
 const JWT_SECRET = process.env.JWT_SECRET as string;
 
+// Aplica cabeçalhos de segurança HTTP
+app.use(helmet()); 
 app.use(cors());
 app.use(express.json());
+
+// Limite de tentativas para rotas de login (máximo 15 tentativas a cada 15 min por IP)
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, 
+  max: 15, 
+  message: { error: 'Muitas tentativas de login. Tente novamente em 15 minutos.' }
+});
+
+// Aplica o bloqueio apenas nas rotas vulneráveis a força bruta
+app.use('/login', loginLimiter);
+app.use('/professional-login', loginLimiter);
+app.use('/super-admin-login', loginLimiter);
 
 app.get('/', (req: Request, res: Response) => {
   res.send('Servidor do Agende+ rodando com sucesso! 🚀');
@@ -25,7 +41,6 @@ app.post('/super-admin-login', async (req: Request, res: Response) => {
   try {
     const { email, password } = req.body;
     
-    // Checagem redundante de e-mail removida!
     if (email !== process.env.SUPER_ADMIN_EMAIL) {
       return res.status(401).json({ error: 'E-mail ou senha inválidos.' });
     }
@@ -602,7 +617,25 @@ app.delete('/expense/:id', authMiddleware, async (req: AuthRequest, res: Respons
 
 app.post('/review', async (req: Request, res: Response) => {
   try {
-    const { appointmentId, rating, comment } = req.body;
+    const { appointmentId, rating, comment, customerPhone } = req.body;
+
+    if (!customerPhone) {
+      return res.status(400).json({ error: 'Telefone do cliente é obrigatório para avaliar.' });
+    }
+
+    const appointment = await prisma.appointment.findUnique({
+      where: { id: appointmentId },
+      include: { customer: true }
+    });
+
+    if (!appointment) return res.status(404).json({ error: 'Agendamento não encontrado.' });
+
+    const cleanPhone = String(customerPhone).replace(/\D/g, '');
+
+    if (appointment.customer.phone !== cleanPhone) {
+      return res.status(403).json({ error: 'Você não tem permissão para avaliar este agendamento.' });
+    }
+
     const review = await prisma.review.create({
       data: { appointmentId, rating: Number(rating), comment: comment || null }
     });

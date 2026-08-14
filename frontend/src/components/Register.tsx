@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Store, UserPlus, LogIn, Check, Sparkles } from 'lucide-react';
+import { api } from '../services/api'; // Importando nossa API centralizada!
 
 interface RegisterProps {
   onRegisterSuccess: () => void;
@@ -25,40 +26,33 @@ export function Register({ onRegisterSuccess, onSwitchToLogin }: RegisterProps) 
     setError('');
 
     try {
-      const tenantRes = await fetch('http://localhost:3000/tenant', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, category, whatsapp, address, closingHour, plan: selectedPlan }),
+      // Usando 'api.post' no lugar de 'fetch'
+      const tenantRes = await api.post('/tenant', {
+        name,
+        category,
+        whatsapp,
+        address,
+        closingHour,
+        plan: selectedPlan
       });
 
-      const tenantData = await tenantRes.json();
+      const tenantData = tenantRes.data;
 
-      if (!tenantRes.ok) {
-        setError(tenantData.error || 'Erro ao cadastrar empresa.');
-        setLoading(false);
-        return;
-      }
-
-      const userRes = await fetch('http://localhost:3000/user', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: adminName,
-          email,
-          password,
-          tenantId: tenantData.id,
-        }),
+      const userRes = await api.post('/user', {
+        name: adminName,
+        email,
+        password,
+        tenantId: tenantData.id,
       });
 
-      if (userRes.ok) {
+      if (userRes.status === 201) {
         alert('Empresa cadastrada com sucesso!');
         onRegisterSuccess();
-      } else {
-        const userData = await userRes.json();
-        setError(userData.error || 'Erro ao criar usuário administrador.');
       }
-    } catch (err) {
-      setError('Erro de conexão com o servidor.');
+    } catch (err: any) {
+      // Capturamos os erros que vêm do axios
+      const errorMsg = err.response?.data?.error || 'Erro de conexão ou e-mail já em uso.';
+      setError(errorMsg);
     } finally {
       setLoading(false);
     }
