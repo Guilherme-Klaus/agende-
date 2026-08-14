@@ -25,7 +25,8 @@ app.post('/super-admin-login', async (req: Request, res: Response) => {
   try {
     const { email, password } = req.body;
     
-    if (email !== process.env.SUPER_ADMIN_EMAIL && email !== 'guilhermeoklaus@gmail.com') {
+    // Checagem redundante de e-mail removida!
+    if (email !== process.env.SUPER_ADMIN_EMAIL) {
       return res.status(401).json({ error: 'E-mail ou senha inválidos.' });
     }
     
@@ -40,7 +41,6 @@ app.post('/super-admin-login', async (req: Request, res: Response) => {
       { expiresIn: '1d' }
     );
     
-    // O tenantId foi adicionado aqui dentro do objeto user!
     return res.status(200).json({ 
       token, 
       user: { 
@@ -386,6 +386,13 @@ app.get('/business-hours/:tenantId/public', async (req: Request, res: Response) 
 app.put('/business-hour/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
+    const hour = await prisma.businessHour.findUnique({ where: { id } });
+    
+    if (!hour) return res.status(404).json({ error: 'Horário não encontrado.' });
+    if (req.role !== 'super-admin' && hour.tenantId !== req.tenantId) {
+      return res.status(403).json({ error: 'Acesso negado.' });
+    }
+
     const { isOpen, openTime, closeTime, lunchStart, lunchEnd } = req.body;
     const updated = await prisma.businessHour.update({
       where: { id },
@@ -400,6 +407,13 @@ app.put('/business-hour/:id', authMiddleware, async (req: AuthRequest, res: Resp
 app.get('/professional-hours/:professionalId', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { professionalId } = req.params;
+    
+    const professional = await prisma.professional.findUnique({ where: { id: professionalId } });
+    if (!professional) return res.status(404).json({ error: 'Profissional não encontrado.' });
+    if (req.role !== 'super-admin' && professional.tenantId !== req.tenantId) {
+      return res.status(403).json({ error: 'Acesso negado.' });
+    }
+
     let hours = await prisma.professionalHour.findMany({ where: { professionalId }, orderBy: { dayOfWeek: 'asc' } });
     
     if (hours.length === 0) {
@@ -427,6 +441,17 @@ app.get('/professional-hours/:professionalId', authMiddleware, async (req: AuthR
 app.put('/professional-hour/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
+    
+    const hour = await prisma.professionalHour.findUnique({ 
+      where: { id },
+      include: { professional: true } 
+    });
+    
+    if (!hour) return res.status(404).json({ error: 'Horário não encontrado.' });
+    if (req.role !== 'super-admin' && hour.professional.tenantId !== req.tenantId) {
+      return res.status(403).json({ error: 'Acesso negado.' });
+    }
+
     const { isOpen, openTime, closeTime, lunchStart, lunchEnd } = req.body;
     const updated = await prisma.professionalHour.update({
       where: { id },
@@ -475,6 +500,13 @@ app.get('/services/:tenantId/public', async (req: Request, res: Response) => {
 app.delete('/service/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
+    const service = await prisma.service.findUnique({ where: { id } });
+    
+    if (!service) return res.status(404).json({ error: 'Serviço não encontrado.' });
+    if (req.role !== 'super-admin' && service.tenantId !== req.tenantId) {
+      return res.status(403).json({ error: 'Acesso negado.' });
+    }
+
     await prisma.appointment.updateMany({
       where: { serviceId: id },
       data: { serviceId: null },
@@ -513,6 +545,13 @@ app.get('/products/:tenantId', authMiddleware, tenantMatchMiddleware, async (req
 app.delete('/product/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
+    const product = await prisma.product.findUnique({ where: { id } });
+    
+    if (!product) return res.status(404).json({ error: 'Produto não encontrado.' });
+    if (req.role !== 'super-admin' && product.tenantId !== req.tenantId) {
+      return res.status(403).json({ error: 'Acesso negado.' });
+    }
+
     await prisma.product.delete({ where: { id } });
     return res.status(200).json({ message: 'Produto excluído com sucesso.' });
   } catch (error) {
@@ -547,6 +586,13 @@ app.get('/expenses/:tenantId', authMiddleware, tenantMatchMiddleware, async (req
 app.delete('/expense/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
+    const expense = await prisma.expense.findUnique({ where: { id } });
+    
+    if (!expense) return res.status(404).json({ error: 'Despesa não encontrada.' });
+    if (req.role !== 'super-admin' && expense.tenantId !== req.tenantId) {
+      return res.status(403).json({ error: 'Acesso negado.' });
+    }
+
     await prisma.expense.delete({ where: { id } });
     return res.status(200).json({ message: 'Despesa excluída com sucesso.' });
   } catch (error) {
@@ -629,6 +675,13 @@ app.get('/professionals/:tenantId/public', async (req: Request, res: Response) =
 app.delete('/professional/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
+    const professional = await prisma.professional.findUnique({ where: { id } });
+    
+    if (!professional) return res.status(404).json({ error: 'Profissional não encontrado.' });
+    if (req.role !== 'super-admin' && professional.tenantId !== req.tenantId) {
+      return res.status(403).json({ error: 'Acesso negado.' });
+    }
+
     await prisma.professionalHour.deleteMany({ where: { professionalId: id } });
     await prisma.professional.delete({ where: { id } });
     return res.status(200).json({ message: 'Profissional excluído com sucesso.' });
